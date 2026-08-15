@@ -19,6 +19,9 @@ public:
 
     void SetPipelineManager(PipelineManager* pipelineMgr);
 
+    QSize sizeHint() const override { return QSize(700, 220); }
+    QSize minimumSizeHint() const override { return QSize(300, 140); }
+
 public slots:
     void UpdateCodePreview();
 

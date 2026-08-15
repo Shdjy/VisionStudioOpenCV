@@ -6,6 +6,8 @@
 #include "../utils/Logger.h"
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QStyle>
+#include <QShowEvent>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -26,80 +28,141 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+
+    if (_isFirstShow)
+    {
+        _isFirstShow = false;
+
+        // 1. 确保启动全屏最大化
+        setWindowState(windowState() | Qt::WindowMaximized);
+
+        // 2. 初始比例分配 (VS 风格黄金比例布局)
+        resizeDocks({ _dockOperators, _dockPipeline }, { 280, 280 }, Qt::Horizontal);
+        resizeDocks({ _dockProperties, _dockHistogram }, { 340, 340 }, Qt::Horizontal);
+        resizeDocks({ _dockCode, _dockLog }, { 220, 220 }, Qt::Vertical);
+    }
+}
+
 void MainWindow::InitUiAndDocks()
 {
-    // 1. 中央主视口
+    // 1. 配置 QMainWindow 现代高级停靠选项 (支持拖拽边缘自动吸附停靠、嵌套、多Tab分组)
+    setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::GroupedDragging);
+    setCorner(Qt::TopLeftCorner, Qt::LeftDockWidgetArea);
+    setCorner(Qt::BottomLeftCorner, Qt::LeftDockWidgetArea);
+    setCorner(Qt::TopRightCorner, Qt::RightDockWidgetArea);
+    setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
+
+    // 2. 中央主图像视口
     _imageViewer = new ImageViewer(this);
     ui->centralLayout->addWidget(_imageViewer);
 
-    // 2. 左侧 Dock: 算子库
+    // 辅助配置 Lambda: 保证每个 DockWidget 均可自由脱离、任意边停靠、边缘吸附
+    auto configureDock = [this](QDockWidget* dock) {
+        dock->setAllowedAreas(Qt::AllDockWidgetAreas);
+        dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable | QDockWidget::DockWidgetClosable);
+    };
+
+    // 3. 左侧 Dock: 算子库
     _dockOperators = new QDockWidget("算子库 (Operators)", this);
     _dockOperators->setObjectName("dockOperators");
+    configureDock(_dockOperators);
     _operatorTree = new OperatorTreeWidget(_dockOperators);
     _dockOperators->setWidget(_operatorTree);
     addDockWidget(Qt::LeftDockWidgetArea, _dockOperators);
 
-    // 3. 左侧 Dock: 流水线
+    // 4. 左侧 Dock: 流水线序列
     _dockPipeline = new QDockWidget("流水线序列 (Pipeline)", this);
     _dockPipeline->setObjectName("dockPipeline");
+    configureDock(_dockPipeline);
     _pipelineList = new PipelineListWidget(_dockPipeline);
     _pipelineList->SetPipelineManager(&_pipelineManager);
     _dockPipeline->setWidget(_pipelineList);
     addDockWidget(Qt::LeftDockWidgetArea, _dockPipeline);
 
-    // 4. 右侧 Dock: 属性与原理教学
+    // 5. 右侧 Dock: 属性与原理教学
     _dockProperties = new QDockWidget("参数调节与原理 (Properties & Principles)", this);
     _dockProperties->setObjectName("dockProperties");
+    configureDock(_dockProperties);
     _propertyPanel = new PropertyPanel(_dockProperties);
     _propertyPanel->SetPipelineManager(&_pipelineManager);
     _dockProperties->setWidget(_propertyPanel);
     addDockWidget(Qt::RightDockWidgetArea, _dockProperties);
 
-    // 5. 右侧 Dock: 直方图分析
+    // 6. 右侧 Dock: 直方图分析
     _dockHistogram = new QDockWidget("直方图分析 (Histogram)", this);
     _dockHistogram->setObjectName("dockHistogram");
+    configureDock(_dockHistogram);
     _histogramWidget = new HistogramWidget(_dockHistogram);
     _dockHistogram->setWidget(_histogramWidget);
     addDockWidget(Qt::RightDockWidgetArea, _dockHistogram);
 
-    // 6. 底部 Dock: 代码生成 (默认停靠底部并折叠/隐藏，需要时唤出)
+    // 7. 底部 Dock: 多语言代码生成 (像 Visual Studio 一样可停靠、可钉住、可拖拽尺寸)
     _dockCode = new QDockWidget("多语言代码生成 (Code Generation)", this);
     _dockCode->setObjectName("dockCode");
+    configureDock(_dockCode);
     _codePreview = new CodePreviewWidget(_dockCode);
     _codePreview->SetPipelineManager(&_pipelineManager);
     _dockCode->setWidget(_codePreview);
     addDockWidget(Qt::BottomDockWidgetArea, _dockCode);
-    _dockCode->hide(); // 默认隐藏，扩大视口区域
 
-    // 7. 底部 Dock: 日志控制台 (默认停靠底部并折叠/隐藏)
+    // 8. 底部 Dock: 运行日志控制台
     _dockLog = new QDockWidget("运行日志与控制台 (Log Console)", this);
     _dockLog->setObjectName("dockLog");
+    configureDock(_dockLog);
     _logPanel = new LogPanelWidget(_dockLog);
     _dockLog->setWidget(_logPanel);
     addDockWidget(Qt::BottomDockWidgetArea, _dockLog);
-    _dockLog->hide(); // 默认隐藏
 
-    // 拆分与堆叠优化
-    tabifyDockWidget(_dockCode, _dockLog);
-
+    // 9. Tab 组合与初始激活
     tabifyDockWidget(_dockProperties, _dockHistogram);
     _dockProperties->raise();
 
-    // 视图菜单增加各 Dock 控制
+    tabifyDockWidget(_dockCode, _dockLog);
+    _dockCode->raise();
+
+    // 10. 设置工具栏图标与悬浮提示 Tooltip (纯图标模式节省空间)
+    ui->mainToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    ui->mainToolBar->setIconSize(QSize(22, 22));
+
+    ui->actionOpenImage->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
+    ui->actionSaveImage->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    ui->actionImportProject->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
+    ui->actionExportProject->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
+    ui->actionRunPipeline->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    ui->actionClearPipeline->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
+    ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
+    ui->actionAbout->setIcon(style()->standardIcon(QStyle::SP_MessageBoxInformation));
+
+    // 11. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标
+    ui->mainToolBar->addSeparator();
+
+    auto* actionToggleCode = new QAction(style()->standardIcon(QStyle::SP_FileDialogContentsView), "代码生成面板", this);
+    actionToggleCode->setToolTip("显示/隐藏 底部代码生成面板 (Alt+C)");
+    actionToggleCode->setStatusTip("快速展开或折叠底部多语言代码生成视口");
+    actionToggleCode->setShortcut(QKeySequence("Alt+C"));
+    connect(actionToggleCode, &QAction::triggered, this, &MainWindow::OnToggleCodeDock);
+    ui->mainToolBar->addAction(actionToggleCode);
+
+    auto* actionToggleLog = new QAction(style()->standardIcon(QStyle::SP_FileDialogDetailedView), "运行日志面板", this);
+    actionToggleLog->setToolTip("显示/隐藏 底部运行日志控制台 (Alt+L)");
+    actionToggleLog->setStatusTip("快速展开或折叠底部运行日志视口");
+    actionToggleLog->setShortcut(QKeySequence("Alt+L"));
+    connect(actionToggleLog, &QAction::triggered, this, &MainWindow::OnToggleLogDock);
+    ui->mainToolBar->addAction(actionToggleLog);
+
+    // 12. 视图菜单补充 Dock 控制
     ui->menuView->addAction(_dockOperators->toggleViewAction());
     ui->menuView->addAction(_dockPipeline->toggleViewAction());
     ui->menuView->addAction(_dockProperties->toggleViewAction());
     ui->menuView->addAction(_dockHistogram->toggleViewAction());
     ui->menuView->addSeparator();
-    ui->menuView->addAction(_dockCode->toggleViewAction());
-    ui->menuView->addAction(_dockLog->toggleViewAction());
+    ui->menuView->addAction(actionToggleCode);
+    ui->menuView->addAction(actionToggleLog);
 
-    // 主工具栏增加代码生成与日志控制台快捷显隐按钮
-    ui->mainToolBar->addSeparator();
-    ui->mainToolBar->addAction(_dockCode->toggleViewAction());
-    ui->mainToolBar->addAction(_dockLog->toggleViewAction());
-
-    // 状态栏
+    // 13. 状态栏
     _lblStatusInfo = new QLabel("就绪", this);
     _lblPipelineTime = new QLabel("流水线耗时: 0.0 ms", this);
     _lblImageDim = new QLabel("图像: 未加载", this);
@@ -107,6 +170,48 @@ void MainWindow::InitUiAndDocks()
     ui->statusBar->addWidget(_lblStatusInfo, 1);
     ui->statusBar->addPermanentWidget(_lblPipelineTime);
     ui->statusBar->addPermanentWidget(_lblImageDim);
+}
+
+void MainWindow::OnToggleCodeDock()
+{
+    if (_dockCode->isHidden())
+    {
+        _dockCode->show();
+        _dockCode->raise();
+        resizeDocks({ _dockCode }, { 240 }, Qt::Vertical);
+    }
+    else
+    {
+        if (_dockCode->visibleRegion().isEmpty())
+        {
+            _dockCode->raise();
+        }
+        else
+        {
+            _dockCode->hide();
+        }
+    }
+}
+
+void MainWindow::OnToggleLogDock()
+{
+    if (_dockLog->isHidden())
+    {
+        _dockLog->show();
+        _dockLog->raise();
+        resizeDocks({ _dockLog }, { 240 }, Qt::Vertical);
+    }
+    else
+    {
+        if (_dockLog->visibleRegion().isEmpty())
+        {
+            _dockLog->raise();
+        }
+        else
+        {
+            _dockLog->hide();
+        }
+    }
 }
 
 void MainWindow::SetupConnections()
@@ -310,6 +415,10 @@ void MainWindow::OnResetLayout()
     _dockHistogram->show();
     _dockCode->show();
     _dockLog->show();
+
+    resizeDocks({ _dockOperators, _dockPipeline }, { 280, 280 }, Qt::Horizontal);
+    resizeDocks({ _dockProperties, _dockHistogram }, { 340, 340 }, Qt::Horizontal);
+    resizeDocks({ _dockCode, _dockLog }, { 220, 220 }, Qt::Vertical);
 }
 
 void MainWindow::OnOperatorAddRequested(const QString& opName)

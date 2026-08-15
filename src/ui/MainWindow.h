@@ -24,6 +24,9 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
+protected:
+    void showEvent(QShowEvent* event) override;
+
 private slots:
     void OnOpenImage();
     void OnSaveImage();
@@ -33,6 +36,9 @@ private slots:
     void OnClearPipeline();
     void OnAbout();
     void OnResetLayout();
+
+    void OnToggleCodeDock();
+    void OnToggleLogDock();
 
     void OnOperatorAddRequested(const QString& opName);
     void OnStepSelected(int index);
@@ -65,6 +71,8 @@ private:
     QLabel* _lblStatusInfo = nullptr;
     QLabel* _lblPipelineTime = nullptr;
     QLabel* _lblImageDim = nullptr;
+
+    bool _isFirstShow = true;
 
     void InitUiAndDocks();
     void SetupConnections();

@@ -82,7 +82,7 @@
     <string>常用工具栏</string>
    </property>
    <property name="toolButtonStyle">
-    <enum>Qt::ToolButtonTextBesideIcon</enum>
+    <enum>Qt::ToolButtonIconOnly</enum>
    </property>
    <attribute name="toolBarArea">
     <enum>TopToolBarArea</enum>
@@ -99,12 +99,20 @@
    <addaction name="actionRunPipeline"/>
    <addaction name="actionClearPipeline"/>
    <addaction name="separator"/>
+   <addaction name="actionResetLayout"/>
+   <addaction name="separator"/>
    <addaction name="actionAbout"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="actionOpenImage">
    <property name="text">
-    <string>打开图像 (Open Image)...</string>
+    <string>打开图像</string>
+   </property>
+   <property name="toolTip">
+    <string>打开图像文件 (Ctrl+O)</string>
+   </property>
+   <property name="statusTip">
+    <string>打开本地磁盘上的测试图像</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
@@ -112,7 +120,13 @@
   </action>
   <action name="actionSaveImage">
    <property name="text">
-    <string>保存处理结果 (Save Image)...</string>
+    <string>保存结果</string>
+   </property>
+   <property name="toolTip">
+    <string>保存当前处理结果图像 (Ctrl+S)</string>
+   </property>
+   <property name="statusTip">
+    <string>将当前最终输出保存至本地文件</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
@@ -120,12 +134,24 @@
   </action>
   <action name="actionImportProject">
    <property name="text">
-    <string>导入工程配置 (Import Project)...</string>
+    <string>导入工程</string>
+   </property>
+   <property name="toolTip">
+    <string>导入流水线工程配置 (JSON)</string>
+   </property>
+   <property name="statusTip">
+    <string>从 JSON 文件加载流水线算法步骤与参数</string>
    </property>
   </action>
   <action name="actionExportProject">
    <property name="text">
-    <string>导出工程配置 (Export Project)...</string>
+    <string>导出工程</string>
+   </property>
+   <property name="toolTip">
+    <string>导出流水线工程配置 (JSON)</string>
+   </property>
+   <property name="statusTip">
+    <string>保存当前流水线算法步骤到 JSON 文件</string>
    </property>
   </action>
   <action name="actionExit">
@@ -138,7 +164,13 @@
   </action>
   <action name="actionRunPipeline">
    <property name="text">
-    <string>运行流水线 (Run Pipeline)</string>
+    <string>执行流水线</string>
+   </property>
+   <property name="toolTip">
+    <string>执行整条流水线 (F5)</string>
+   </property>
+   <property name="statusTip">
+    <string>从头重新计算所有算法步骤</string>
    </property>
    <property name="shortcut">
     <string>F5</string>
@@ -146,17 +178,35 @@
   </action>
   <action name="actionClearPipeline">
    <property name="text">
-    <string>清空流水线 (Clear Pipeline)</string>
+    <string>清空流水线</string>
+   </property>
+   <property name="toolTip">
+    <string>清空当前流水线的所有算子步骤</string>
+   </property>
+   <property name="statusTip">
+    <string>移除流水线中的全部算法节点</string>
    </property>
   </action>
   <action name="actionAbout">
    <property name="text">
-    <string>关于 VisionStudio...</string>
+    <string>关于</string>
+   </property>
+   <property name="toolTip">
+    <string>关于 VisionStudio OpenCV</string>
+   </property>
+   <property name="statusTip">
+    <string>查看系统版本与技术说明</string>
    </property>
   </action>
   <action name="actionResetLayout">
    <property name="text">
-    <string>恢复默认界面布局</string>
+    <string>重置布局</string>
+   </property>
+   <property name="toolTip">
+    <string>恢复默认界面停靠布局</string>
+   </property>
+   <property name="statusTip">
+    <string>重置所有侧边栏与停靠面板位置</string>
    </property>
   </action>
  </widget>

@@ -11,6 +11,16 @@ QWidget {
     font-size: 9pt;
 }
 
+QMainWindow::separator {
+    background-color: #333337;
+    width: 4px;
+    height: 4px;
+}
+
+QMainWindow::separator:hover {
+    background-color: #007acc;
+}
+
 QMenuBar {
     background-color: #1e1e1e;
     color: #cccccc;
@@ -41,16 +51,18 @@ QMenu::item:selected {
 QToolBar {
     background-color: #2d2d30;
     border-bottom: 1px solid #3e3e42;
-    spacing: 4px;
-    padding: 2px;
+    spacing: 6px;
+    padding: 3px 6px;
 }
 
 QToolButton {
-    background-color: #333337;
+    background-color: transparent;
     color: #e0e0e0;
-    border: 1px solid #3e3e42;
-    border-radius: 3px;
-    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 3px 4px;
+    min-width: 26px;
+    min-height: 26px;
 }
 
 QToolButton:hover {
@@ -72,9 +84,30 @@ QDockWidget {
 QDockWidget::title {
     text-align: left;
     background-color: #2d2d30;
-    padding: 6px;
-    border: 1px solid #3e3e42;
+    padding: 6px 8px;
+    border-bottom: 1px solid #3e3e42;
     font-weight: bold;
+}
+
+/* VS 风格选项卡栏 */
+QTabBar::tab {
+    background-color: #2d2d30;
+    color: #969696;
+    border: 1px solid #333337;
+    border-bottom: none;
+    padding: 5px 12px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-top: 2px solid #007acc;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #38383c;
+    color: #cccccc;
 }
 
 QGroupBox {
@@ -179,7 +212,25 @@ QScrollBar::handle:vertical:hover {
     background: #686868;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+QScrollBar:horizontal {
+    background: #1e1e1e;
+    height: 10px;
+    margin: 0px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #424242;
+    min-width: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #686868;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
     height: 0px;
 }
 
