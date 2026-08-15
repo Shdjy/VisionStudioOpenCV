@@ -22,6 +22,7 @@ message(STATUS "Found Qt Version: ${QT_VERSION} (Qt${QT_VERSION_MAJOR})")
 # 2. 查找 OpenCV (带智能 Fallback 支持 MinGW 链接 MSVC 导入库)
 # ----------------------------------------------------------------------------
 list(APPEND CMAKE_PREFIX_PATH
+    "D:/opencv4.9/build_mingw"
     "D:/opencv4.9/opencv/build/x64/vc16/lib"
     "D:/opencv4.9/opencv/build/x64/vc15/lib"
     "D:/opencv4.9/opencv/build"
@@ -44,8 +45,9 @@ if(NOT OpenCV_FOUND)
         "C:/opencv/build/include"
     )
 
-    find_library(OpenCV_LIBS NAMES opencv_world490 opencv_world490d opencv_world341 opencv_world341d opencv_world
+    find_library(OpenCV_LIBS NAMES opencv_world490 opencv_world490.dll opencv_world490d opencv_world341 opencv_world341d opencv_world
         PATHS
+        "${CMAKE_CURRENT_SOURCE_DIR}/lib_mingw"
         "D:/opencv4.9/opencv/build/x64/vc16/lib"
         "D:/opencv4.9/opencv/build/x64/vc15/lib"
         "D:/OpenCV3.4.1/build_vs2017_NoCuda_Win64/install/x64/vc15/lib"
