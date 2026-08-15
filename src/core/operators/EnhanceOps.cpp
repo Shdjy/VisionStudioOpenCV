@@ -1,6 +1,5 @@
 #include "EnhanceOps.h"
 #include <sstream>
-#include <cmath>
 
 // ---------------- BrightnessContrastOp ----------------
 BrightnessContrastOp::BrightnessContrastOp()
@@ -8,9 +7,8 @@ BrightnessContrastOp::BrightnessContrastOp()
     OpParameter alphaParam;
     alphaParam.Name = "alpha";
     alphaParam.DisplayName = "对比度增益 (Alpha)";
-    alphaParam.Tooltip = "对比度乘数因子 (1.0 为原图，>1 增强对比度，<1 降低对比度)";
     alphaParam.Type = ParamType::DoubleSlider;
-    alphaParam.Value = 1.2;
+    alphaParam.Value = 1.0;
     alphaParam.MinValue = 0.1;
     alphaParam.MaxValue = 3.0;
     alphaParam.Step = 0.05;
@@ -19,9 +17,8 @@ BrightnessContrastOp::BrightnessContrastOp()
     OpParameter betaParam;
     betaParam.Name = "beta";
     betaParam.DisplayName = "亮度偏置 (Beta)";
-    betaParam.Tooltip = "亮度增减偏置值 (-100 ~ 100)";
     betaParam.Type = ParamType::IntSlider;
-    betaParam.Value = 10;
+    betaParam.Value = 0;
     betaParam.MinValue = -100;
     betaParam.MaxValue = 100;
     betaParam.Step = 1;
@@ -30,21 +27,16 @@ BrightnessContrastOp::BrightnessContrastOp()
 
 std::string BrightnessContrastOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：亮度与对比度线性变换\n\n"
-           "对每个像素执行线性变换公式：\n"
-           "$$g(x,y) = \\alpha \\cdot f(x,y) + \\beta$$\n"
-           "* $\\alpha$ (对比度/斜率)：控制图像明暗拉伸跨度；\n"
-           "* $\\beta$ (亮度/截距)：控制图像整体明暗平移。";
+    return "### 📘 算子原理：亮度和对比度线性调节 (convertScaleAbs)\n\n"
+           "线性点变换模型：\n"
+           "$$dst(x, y) = \\text{saturate\\_cast}\\langle uchar \\rangle (\\alpha \\cdot src(x, y) + \\beta)$$\n"
+           "* **$\\alpha > 1$**：增强对比度（动态范围扩大）；$\\alpha < 1$：降低对比度；\n"
+           "* **$\\beta > 0$**：整体提亮；$\\beta < 0$：整体变暗。";
 }
 
 bool BrightnessContrastOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     double alpha = _params[0].GetDouble();
     int beta = _params[1].GetInt();
 
@@ -66,7 +58,10 @@ std::string BrightnessContrastOp::GenerateCppCode(const std::string& inVar, cons
     int beta = _params[1].GetInt();
 
     std::stringstream ss;
-    ss << inVar << ".convertTo(" << outVar << ", -1, " << alpha << ", " << beta << ");";
+    ss << "// 亮度与对比度线性变换参数配置\n"
+       << "double alpha = " << alpha << ";            // 对比度增益系数 (Alpha)\n"
+       << "double beta = " << beta << ";              // 亮度偏移量 (Beta)\n"
+       << inVar << ".convertTo(" << outVar << ", -1, alpha, beta);";
     return ss.str();
 }
 
@@ -76,7 +71,10 @@ std::string BrightnessContrastOp::GeneratePythonCode(const std::string& inVar, c
     int beta = _params[1].GetInt();
 
     std::stringstream ss;
-    ss << outVar << " = cv2.convertScaleAbs(" << inVar << ", alpha=" << alpha << ", beta=" << beta << ")";
+    ss << "# 亮度与对比度线性变换参数配置\n"
+       << "alpha = " << alpha << "                   # 对比度增益系数\n"
+       << "beta = " << beta << "                     # 亮度偏移量\n"
+       << outVar << " = cv2.convertScaleAbs(" << inVar << ", alpha=alpha, beta=beta)";
     return ss.str();
 }
 
@@ -87,40 +85,19 @@ EqualizeHistOp::EqualizeHistOp()
 
 std::string EqualizeHistOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：直方图均衡化 (equalizeHist)\n\n"
-           "通过累积分布函数 (CDF) 将图像原先集中在窄带区间的灰度直方图重新映射为全灰度范围 (0~255) 的均匀分布：\n"
-           "$$s_k = T(r_k) = (L-1) \\sum_{j=0}^{k} p_r(r_j)$$\n"
-           "能够显著增强低照度与背光图像的对比度与层次感。";
+    return "### 📘 算子原理：全局直方图均衡化 (equalizeHist)\n\n"
+           "通过累积分布函数 (CDF) 将原始图像偏窄的灰度级动态范围非线性拉伸至 $[0, 255]$ 均匀分布，大幅提升图像整体对比度与暗部细节。";
 }
 
 bool EqualizeHistOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    cv::Mat gray = input;
+    if (input.channels() > 1) cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
 
     try
     {
-        if (input.channels() == 1)
-        {
-            cv::equalizeHist(input, output);
-        }
-        else if (input.channels() == 3)
-        {
-            cv::Mat ycrcb;
-            cv::cvtColor(input, ycrcb, cv::COLOR_BGR2YCrCb);
-            std::vector<cv::Mat> channels;
-            cv::split(ycrcb, channels);
-            cv::equalizeHist(channels[0], channels[0]); // 仅对 Y 亮度通道均衡
-            cv::merge(channels, ycrcb);
-            cv::cvtColor(ycrcb, output, cv::COLOR_YCrCb2BGR);
-        }
-        else
-        {
-            output = input.clone();
-        }
+        cv::equalizeHist(gray, output);
         return true;
     }
     catch (const cv::Exception& e)
@@ -133,33 +110,16 @@ bool EqualizeHistOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
 std::string EqualizeHistOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     std::stringstream ss;
-    ss << "if (" << inVar << ".channels() == 1)\n"
-       << "{\n"
-       << "    cv::equalizeHist(" << inVar << ", " << outVar << ");\n"
-       << "}\n"
-       << "else\n"
-       << "{\n"
-       << "    cv::Mat ycrcb;\n"
-       << "    cv::cvtColor(" << inVar << ", ycrcb, cv::COLOR_BGR2YCrCb);\n"
-       << "    std::vector<cv::Mat> channels;\n"
-       << "    cv::split(ycrcb, channels);\n"
-       << "    cv::equalizeHist(channels[0], channels[0]);\n"
-       << "    cv::merge(channels, ycrcb);\n"
-       << "    cv::cvtColor(ycrcb, " << outVar << ", cv::COLOR_YCrCb2BGR);\n"
-       << "}";
+    ss << "// 全局直方图均衡化 (扩展灰度动态范围)\n"
+       << "cv::equalizeHist(" << inVar << ", " << outVar << ");";
     return ss.str();
 }
 
 std::string EqualizeHistOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     std::stringstream ss;
-    ss << "if len(" << inVar << ".shape) == 2 or " << inVar << ".shape[2] == 1:\n"
-       << "    " << outVar << " = cv2.equalizeHist(" << inVar << ")\n"
-       << "else:\n"
-       << "    ycrcb = cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2YCrCb)\n"
-       << "    channels = list(cv2.split(ycrcb))\n"
-       << "    channels[0] = cv2.equalizeHist(channels[0])\n"
-       << "    " << outVar << " = cv2.cvtColor(cv2.merge(channels), cv2.COLOR_YCrCb2BGR)";
+    ss << "# 全局直方图均衡化 (扩展灰度动态范围)\n"
+       << outVar << " = cv2.equalizeHist(" << inVar << ")";
     return ss.str();
 }
 
@@ -169,7 +129,6 @@ CLAHEOp::CLAHEOp()
     OpParameter clipParam;
     clipParam.Name = "clipLimit";
     clipParam.DisplayName = "对比度截断限制 (ClipLimit)";
-    clipParam.Tooltip = "限制对比度放大倍数阈值 (通常 2.0 ~ 4.0)";
     clipParam.Type = ParamType::DoubleSlider;
     clipParam.Value = 2.0;
     clipParam.MinValue = 1.0;
@@ -180,57 +139,33 @@ CLAHEOp::CLAHEOp()
     OpParameter gridParam;
     gridParam.Name = "tileGridSize";
     gridParam.DisplayName = "网格分块大小 (TileGridSize)";
-    gridParam.Tooltip = "图像划分的网格行列大小 (如 8x8)";
     gridParam.Type = ParamType::IntSlider;
     gridParam.Value = 8;
     gridParam.MinValue = 2;
     gridParam.MaxValue = 32;
-    gridParam.Step = 1;
+    gridParam.Step = 2;
     _params.push_back(gridParam);
 }
 
 std::string CLAHEOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：限制对比度自适应直方图均衡化 (CLAHE)\n\n"
-           "普通直方图均衡化倾向于过度放大平坦背景区域的噪声。CLAHE 通过两项关键改进：\n"
-           "1. **局部瓦片网格 (Tile Grid)**：将图像划分为若干不重叠的矩形块独立进行均衡化；\n"
-           "2. **对比度截断限制 (Clip Limit)**：对超出上限阈值的直方图计数进行裁剪并均匀重分配；\n"
-           "3. **双线性插值**：缝合各网格边缘，消除分块边界人工痕迹。";
+           "将图像划分为互不重叠的小网格（Tiles），在局部计算直方图均衡并应用 **ClipLimit** 截断过高直方图峰值以防止局部背景噪声被过度放大，最后通过双线性插值消除块效应。";
 }
 
 bool CLAHEOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    cv::Mat gray = input;
+    if (input.channels() > 1) cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
 
     double clipLimit = _params[0].GetDouble();
     int grid = _params[1].GetInt();
-    if (grid < 2) grid = 2;
 
     try
     {
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(clipLimit, cv::Size(grid, grid));
-        if (input.channels() == 1)
-        {
-            clahe->apply(input, output);
-        }
-        else if (input.channels() == 3)
-        {
-            cv::Mat lab;
-            cv::cvtColor(input, lab, cv::COLOR_BGR2Lab);
-            std::vector<cv::Mat> channels;
-            cv::split(lab, channels);
-            clahe->apply(channels[0], channels[0]); // 仅对 L 亮度通道处理
-            cv::merge(channels, lab);
-            cv::cvtColor(lab, output, cv::COLOR_Lab2BGR);
-        }
-        else
-        {
-            output = input.clone();
-        }
+        clahe->apply(gray, output);
         return true;
     }
     catch (const cv::Exception& e)
@@ -244,24 +179,13 @@ std::string CLAHEOp::GenerateCppCode(const std::string& inVar, const std::string
 {
     double clipLimit = _params[0].GetDouble();
     int grid = _params[1].GetInt();
-    if (grid < 2) grid = 2;
 
     std::stringstream ss;
-    ss << "cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(" << clipLimit << ", cv::Size(" << grid << ", " << grid << "));\n"
-       << "if (" << inVar << ".channels() == 1)\n"
-       << "{\n"
-       << "    clahe->apply(" << inVar << ", " << outVar << ");\n"
-       << "}\n"
-       << "else\n"
-       << "{\n"
-       << "    cv::Mat lab;\n"
-       << "    cv::cvtColor(" << inVar << ", lab, cv::COLOR_BGR2Lab);\n"
-       << "    std::vector<cv::Mat> channels;\n"
-       << "    cv::split(lab, channels);\n"
-       << "    clahe->apply(channels[0], channels[0]);\n"
-       << "    cv::merge(channels, lab);\n"
-       << "    cv::cvtColor(lab, " << outVar << ", cv::COLOR_Lab2BGR);\n"
-       << "}";
+    ss << "// CLAHE限制对比度自适应直方图均衡化参数配置\n"
+       << "double clipLimit = " << clipLimit << ";          // 局部对比度截断限制 (防止过度放大噪点)\n"
+       << "int tileGrid = " << grid << ";               // 分块网格尺寸\n"
+       << "cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(clipLimit, cv::Size(tileGrid, tileGrid));\n"
+       << "clahe->apply(" << inVar << ", " << outVar << ");";
     return ss.str();
 }
 
@@ -269,17 +193,13 @@ std::string CLAHEOp::GeneratePythonCode(const std::string& inVar, const std::str
 {
     double clipLimit = _params[0].GetDouble();
     int grid = _params[1].GetInt();
-    if (grid < 2) grid = 2;
 
     std::stringstream ss;
-    ss << "clahe = cv2.createCLAHE(clipLimit=" << clipLimit << ", tileGridSize=(" << grid << ", " << grid << "))\n"
-       << "if len(" << inVar << ".shape) == 2 or " << inVar << ".shape[2] == 1:\n"
-       << "    " << outVar << " = clahe.apply(" << inVar << ")\n"
-       << "else:\n"
-       << "    lab = cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2Lab)\n"
-       << "    channels = list(cv2.split(lab))\n"
-       << "    channels[0] = clahe.apply(channels[0])\n"
-       << "    " << outVar << " = cv2.cvtColor(cv2.merge(channels), cv2.COLOR_Lab2BGR)";
+    ss << "# CLAHE限制对比度自适应直方图均衡化参数配置\n"
+       << "clip_limit = " << clipLimit << "              # 局部对比度截断限制\n"
+       << "tile_grid = (" << grid << ", " << grid << ")           # 分块网格尺寸\n"
+       << "clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid)\n"
+       << outVar << " = clahe.apply(" << inVar << ")";
     return ss.str();
 }
 
@@ -288,10 +208,9 @@ GammaCorrectionOp::GammaCorrectionOp()
 {
     OpParameter gammaParam;
     gammaParam.Name = "gamma";
-    gammaParam.DisplayName = "伽马值 (Gamma)";
-    gammaParam.Tooltip = "Gamma 参数 (>1 增强暗部，<1 压暗亮部)";
+    gammaParam.DisplayName = "伽马系数 (Gamma γ)";
     gammaParam.Type = ParamType::DoubleSlider;
-    gammaParam.Value = 1.5;
+    gammaParam.Value = 1.0;
     gammaParam.MinValue = 0.1;
     gammaParam.MaxValue = 4.0;
     gammaParam.Step = 0.05;
@@ -300,32 +219,27 @@ GammaCorrectionOp::GammaCorrectionOp()
 
 std::string GammaCorrectionOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：伽马校正 (Gamma Correction)\n\n"
-           "基于幂律响应曲线的非线性明暗调节：\n"
-           "$$s = 255 \\cdot \\left( \\frac{r}{255} \\right)^\\gamma$$\n"
-           "通常预先建立 256 长度的 Look-Up Table (LUT) 查找表加速逐像素映射。";
+    return "### 📘 算子原理：非线性伽马校正 (Gamma Correction)\n\n"
+           "非线性灰度变换模型：\n"
+           "$$dst(x, y) = 255 \\cdot \\left( \\frac{src(x, y)}{255} \\right)^\\gamma$$\n"
+           "* **$\\gamma < 1$**：暗部非线性拉伸扩展，提亮阴影细节；\n"
+           "* **$\\gamma > 1$**：压低暗部，保留高光反差。";
 }
 
 bool GammaCorrectionOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     double gamma = _params[0].GetDouble();
-    if (gamma <= 0.01) gamma = 0.01;
 
     try
     {
-        cv::Mat lut(1, 256, CV_8U);
-        uchar* ptr = lut.ptr();
+        unsigned char lut[256];
         for (int i = 0; i < 256; ++i)
         {
-            ptr[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, 1.0 / gamma) * 255.0);
+            lut[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, gamma) * 255.0);
         }
-        cv::LUT(input, lut, output);
+        cv::Mat lutTable(1, 256, CV_8U, lut);
+        cv::LUT(input, lutTable, output);
         return true;
     }
     catch (const cv::Exception& e)
@@ -338,20 +252,28 @@ bool GammaCorrectionOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
 std::string GammaCorrectionOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     double gamma = _params[0].GetDouble();
+
     std::stringstream ss;
-    ss << "cv::Mat lut(1, 256, CV_8U);\n"
-       << "uchar* ptr = lut.ptr();\n"
-       << "for (int i = 0; i < 256; ++i) ptr[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, 1.0 / " << gamma << ") * 255.0);\n"
-       << "cv::LUT(" << inVar << ", lut, " << outVar << ");";
+    ss << "// 非线性伽马校正参数配置 (通过查找表 LUT 加速)\n"
+       << "double gammaValue = " << gamma << ";        // 伽马系数 (<1提亮暗部, >1压暗)\n"
+       << "unsigned char lut[256];\n"
+       << "for (int i = 0; i < 256; ++i) {\n"
+       << "    lut[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, gammaValue) * 255.0);\n"
+       << "}\n"
+       << "cv::Mat lutTable(1, 256, CV_8U, lut);\n"
+       << "cv::LUT(" << inVar << ", lutTable, " << outVar << ");";
     return ss.str();
 }
 
 std::string GammaCorrectionOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     double gamma = _params[0].GetDouble();
+
     std::stringstream ss;
-    ss << "invGamma = 1.0 / " << gamma << "\n"
-       << "table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype('uint8')\n"
+    ss << "# 非线性伽马校正参数配置\n"
+       << "gamma_val = " << gamma << "              # 伽马系数\n"
+       << "inv_gamma = gamma_val\n"
+       << "table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype(\"uint8\")\n"
        << outVar << " = cv2.LUT(" << inVar << ", table)";
     return ss.str();
 }
@@ -363,18 +285,13 @@ InvertOp::InvertOp()
 
 std::string InvertOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：图像反色 (bitwise_not)\n\n"
-           "逐像素执行按位非操作 $\\text{dst}(x,y) = 255 - \\text{src}(x,y)$，常用于将黑底白字转换为白底黑字或生成负片效果。";
+    return "### 📘 算子原理：图像反相 (bitwise_not)\n\n"
+           "对图像中每个像素进行按位非运算（$dst = 255 - src$），生成底片反色效果。";
 }
 
 bool InvertOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     try
     {
         cv::bitwise_not(input, output);
@@ -390,53 +307,50 @@ bool InvertOp::Process(const cv::Mat& input, cv::Mat& output, std::string& error
 std::string InvertOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     std::stringstream ss;
-    ss << "cv::bitwise_not(" << inVar << ", " << outVar << ");";
+    ss << "// 图像颜色反相 (底片效果)\n"
+       << "cv::bitwise_not(" << inVar << ", " << outVar << ");";
     return ss.str();
 }
 
 std::string InvertOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     std::stringstream ss;
-    ss << outVar << " = cv2.bitwise_not(" << inVar << ")";
+    ss << "# 图像颜色反相 (底片效果)\n"
+       << outVar << " = cv2.bitwise_not(" << inVar << ")";
     return ss.str();
 }
 
 // ---------------- SharpenOp ----------------
 SharpenOp::SharpenOp()
 {
-    OpParameter strengthParam;
-    strengthParam.Name = "strength";
-    strengthParam.DisplayName = "锐化强度 (Strength)";
-    strengthParam.Tooltip = "锐化增强倍率 (1.0 ~ 5.0)";
-    strengthParam.Type = ParamType::DoubleSlider;
-    strengthParam.Value = 1.5;
-    strengthParam.MinValue = 0.5;
-    strengthParam.MaxValue = 5.0;
-    strengthParam.Step = 0.1;
-    _params.push_back(strengthParam);
+    OpParameter stParam;
+    stParam.Name = "strength";
+    stParam.DisplayName = "锐化强度 (Strength)";
+    stParam.Type = ParamType::DoubleSlider;
+    stParam.Value = 1.0;
+    stParam.MinValue = 0.2;
+    stParam.MaxValue = 3.0;
+    stParam.Step = 0.1;
+    _params.push_back(stParam);
 }
 
 std::string SharpenOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：拉普拉斯高通锐化 (Sharpen)\n\n"
-           "构造拉普拉斯锐化滤波算子核，将原图像与高频边缘差分加权融合，增强模糊边缘反差。";
+    return "### 📘 算子原理：USM 反锐化掩膜 (Unsharp Masking)\n\n"
+           "基于原图减去高斯平滑模糊图得到高频细节掩膜，再按强度权重叠加回原图：\n"
+           "$$dst = src + strength \\cdot (src - GaussianBlur(src))$$";
 }
 
 bool SharpenOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    double strength = _params[0].GetDouble();
 
-    double s = _params[0].GetDouble();
-    cv::Mat kernel = (cv::Mat_<float>(3, 3) <<  0,  -s,   0,
-                                               -s, 1 + 4*s, -s,
-                                                0,  -s,   0);
     try
     {
-        cv::filter2D(input, output, -1, kernel);
+        cv::Mat blurred;
+        cv::GaussianBlur(input, blurred, cv::Size(0, 0), 3);
+        cv::addWeighted(input, 1.0 + strength, blurred, -strength, 0, output);
         return true;
     }
     catch (const cv::Exception& e)
@@ -448,18 +362,25 @@ bool SharpenOp::Process(const cv::Mat& input, cv::Mat& output, std::string& erro
 
 std::string SharpenOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    double s = _params[0].GetDouble();
+    double strength = _params[0].GetDouble();
+
     std::stringstream ss;
-    ss << "cv::Mat kernel_" << outVar << " = (cv::Mat_<float>(3,3) << 0, -" << s << ", 0, -" << s << ", " << 1 + 4*s << ", -" << s << ", 0, -" << s << ", 0);\n"
-       << "cv::filter2D(" << inVar << ", " << outVar << ", -1, kernel_" << outVar << ");";
+    ss << "// USM反锐化掩膜增强参数配置\n"
+       << "double sharpenStrength = " << strength << ";  // 锐化高频增益强度\n"
+       << "cv::Mat blurred_" << outVar << ";\n"
+       << "cv::GaussianBlur(" << inVar << ", blurred_" << outVar << ", cv::Size(0, 0), 3.0);\n"
+       << "cv::addWeighted(" << inVar << ", 1.0 + sharpenStrength, blurred_" << outVar << ", -sharpenStrength, 0, " << outVar << ");";
     return ss.str();
 }
 
 std::string SharpenOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    double s = _params[0].GetDouble();
+    double strength = _params[0].GetDouble();
+
     std::stringstream ss;
-    ss << "kernel_" << outVar << " = np.array([[0, -" << s << ", 0], [-" << s << ", " << 1 + 4*s << ", -" << s << "], [0, -" << s << ", 0]], dtype=np.float32)\n"
-       << outVar << " = cv2.filter2D(" << inVar << ", -1, kernel_" << outVar << ")";
+    ss << "# USM反锐化掩膜增强参数配置\n"
+       << "sharpen_strength = " << strength << "         # 锐化高频增益强度\n"
+       << "blurred = cv2.GaussianBlur(" << inVar << ", (0, 0), 3.0)\n"
+       << outVar << " = cv2.addWeighted(" << inVar << ", 1.0 + sharpen_strength, blurred, -sharpen_strength, 0)";
     return ss.str();
 }

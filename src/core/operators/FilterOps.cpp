@@ -6,8 +6,8 @@ GaussianBlurOp::GaussianBlurOp()
 {
     OpParameter ksizeParam;
     ksizeParam.Name = "ksize";
-    ksizeParam.DisplayName = "核大小 (Ksize)";
-    ksizeParam.Tooltip = "高斯核尺寸 (必须为奇数，如 3, 5, 7, 9...)";
+    ksizeParam.DisplayName = "高斯核大小 (KSize)";
+    ksizeParam.Tooltip = "核宽和高，必须为正奇数 (如 3, 5, 7...)";
     ksizeParam.Type = ParamType::IntSlider;
     ksizeParam.Value = 5;
     ksizeParam.MinValue = 1;
@@ -17,8 +17,8 @@ GaussianBlurOp::GaussianBlurOp()
 
     OpParameter sigmaParam;
     sigmaParam.Name = "sigmaX";
-    sigmaParam.DisplayName = "标准差 (SigmaX)";
-    sigmaParam.Tooltip = "X方向高斯核标准差 (0 表示由核大小自动计算)";
+    sigmaParam.DisplayName = "X方向标准差 (SigmaX)";
+    sigmaParam.Tooltip = "高斯核的标准差，0 表示根据核大小自动计算";
     sigmaParam.Type = ParamType::DoubleSlider;
     sigmaParam.Value = 1.5;
     sigmaParam.MinValue = 0.0;
@@ -30,24 +30,16 @@ GaussianBlurOp::GaussianBlurOp()
 std::string GaussianBlurOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：高斯滤波 (GaussianBlur)\n\n"
-           "高斯滤波是一种线性平滑滤波，其权重服从二维高斯正态分布：\n"
-           "$$G(x, y) = \\frac{1}{2\\pi\\sigma^2} e^{-\\frac{x^2+y^2}{2\\sigma^2}}$$\n\n"
-           "**参数指南**：\n"
-           "* `ksize`：核大小，必须为**正奇数**。核越大，模糊程度越高。\n"
-           "* `sigmaX`：标准差，决定高斯曲线的胖瘦。若设为 0，OpenCV 会根据公式 $\\sigma = 0.3 \\times ((ksize-1)\\times 0.5 - 1) + 0.8$ 自动估算。";
+           "高斯滤波是一种线性平滑滤波，其权重服从二维正态高斯分布：\n"
+           "$$G(x, y) = \\frac{1}{2\\pi\\sigma^2} e^{-\\frac{x^2+y^2}{2\\sigma^2}}$$\n"
+           "**特点**：越靠近核中心的像素权重越大，非常适合消除服从高斯分布的高频随机噪声。";
 }
 
 bool GaussianBlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     int ksize = _params[0].GetInt();
-    if (ksize % 2 == 0) { ksize += 1; }
-    if (ksize < 1) { ksize = 1; }
+    if (ksize % 2 == 0) ksize += 1;
     double sigmaX = _params[1].GetDouble();
 
     try
@@ -65,22 +57,28 @@ bool GaussianBlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
 std::string GaussianBlurOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     int ksize = _params[0].GetInt();
-    if (ksize % 2 == 0) { ksize += 1; }
+    if (ksize % 2 == 0) ksize += 1;
     double sigmaX = _params[1].GetDouble();
 
     std::stringstream ss;
-    ss << "cv::GaussianBlur(" << inVar << ", " << outVar << ", cv::Size(" << ksize << ", " << ksize << "), " << sigmaX << ");";
+    ss << "// 高斯滤波参数配置\n"
+       << "int ksize = " << ksize << ";             // 核大小 (正奇数)\n"
+       << "double sigmaX = " << sigmaX << ";         // X方向标准差\n"
+       << "cv::GaussianBlur(" << inVar << ", " << outVar << ", cv::Size(ksize, ksize), sigmaX);";
     return ss.str();
 }
 
 std::string GaussianBlurOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     int ksize = _params[0].GetInt();
-    if (ksize % 2 == 0) { ksize += 1; }
+    if (ksize % 2 == 0) ksize += 1;
     double sigmaX = _params[1].GetDouble();
 
     std::stringstream ss;
-    ss << outVar << " = cv2.GaussianBlur(" << inVar << ", (" << ksize << ", " << ksize << "), " << sigmaX << ")";
+    ss << "# 高斯滤波参数配置\n"
+       << "ksize = (" << ksize << ", " << ksize << ")         # 核大小 (正奇数)\n"
+       << "sigma_x = " << sigmaX << "            # X方向标准差\n"
+       << outVar << " = cv2.GaussianBlur(" << inVar << ", ksize, sigma_x)";
     return ss.str();
 }
 
@@ -89,8 +87,7 @@ BlurOp::BlurOp()
 {
     OpParameter ksizeParam;
     ksizeParam.Name = "ksize";
-    ksizeParam.DisplayName = "核大小 (Ksize)";
-    ksizeParam.Tooltip = "均值核尺寸 (正整数，如 3, 5, 7...)";
+    ksizeParam.DisplayName = "均值核大小 (KSize)";
     ksizeParam.Type = ParamType::IntSlider;
     ksizeParam.Value = 5;
     ksizeParam.MinValue = 1;
@@ -101,22 +98,17 @@ BlurOp::BlurOp()
 
 std::string BlurOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：均值滤波 (blur)\n\n"
-           "均值滤波使用归一化矩形核进行卷积，核内所有像素权重均等：\n"
-           "$$K = \\frac{1}{K_{width} \\times K_{height}} \\begin{bmatrix} 1 & 1 & \\dots & 1 \\\\ \\vdots & \\vdots & \\ddots & \\vdots \\\\ 1 & 1 & \\dots & 1 \\end{bmatrix}$$\n"
-           "主要用于快速消除图像中的颗粒噪声，但对边缘细节模糊较明显。";
+    return "### 📘 算子原理：均值滤波 (blur / boxFilter)\n\n"
+           "每个像素点的输出为邻域窗口内所有像素的算术平均值：\n"
+           "$$K = \\frac{1}{ksize \\times ksize} \\begin{bmatrix} 1 & \\dots & 1 \\\\ \\vdots & \\ddots & \\vdots \\\\ 1 & \\dots & 1 \\end{bmatrix}$$\n"
+           "**特点**：运算速度快，但会造成边缘细节模糊。";
 }
 
 bool BlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     int ksize = _params[0].GetInt();
-    if (ksize < 1) { ksize = 1; }
+    if (ksize < 1) ksize = 1;
 
     try
     {
@@ -133,16 +125,24 @@ bool BlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMs
 std::string BlurOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     int ksize = _params[0].GetInt();
+    if (ksize < 1) ksize = 1;
+
     std::stringstream ss;
-    ss << "cv::blur(" << inVar << ", " << outVar << ", cv::Size(" << ksize << ", " << ksize << "));";
+    ss << "// 均值滤波参数配置\n"
+       << "int ksize = " << ksize << ";             // 均值核尺寸\n"
+       << "cv::blur(" << inVar << ", " << outVar << ", cv::Size(ksize, ksize));";
     return ss.str();
 }
 
 std::string BlurOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     int ksize = _params[0].GetInt();
+    if (ksize < 1) ksize = 1;
+
     std::stringstream ss;
-    ss << outVar << " = cv2.blur(" << inVar << ", (" << ksize << ", " << ksize << "))";
+    ss << "# 均值滤波参数配置\n"
+       << "ksize = (" << ksize << ", " << ksize << ")         # 均值核尺寸\n"
+       << outVar << " = cv2.blur(" << inVar << ", ksize)";
     return ss.str();
 }
 
@@ -151,11 +151,10 @@ MedianBlurOp::MedianBlurOp()
 {
     OpParameter ksizeParam;
     ksizeParam.Name = "ksize";
-    ksizeParam.DisplayName = "核大小 (Ksize)";
-    ksizeParam.Tooltip = "中值滤波孔径线性尺寸 (必须为奇数且大于1)";
+    ksizeParam.DisplayName = "中值核大小 (KSize)";
     ksizeParam.Type = ParamType::IntSlider;
     ksizeParam.Value = 5;
-    ksizeParam.MinValue = 3;
+    ksizeParam.MinValue = 1;
     ksizeParam.MaxValue = 31;
     ksizeParam.Step = 2;
     _params.push_back(ksizeParam);
@@ -164,21 +163,15 @@ MedianBlurOp::MedianBlurOp()
 std::string MedianBlurOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：中值滤波 (medianBlur)\n\n"
-           "中值滤波是一种典型的**非线性滤波**技术。它将像素邻域窗口内的所有灰度值排序，取中间值作为输出。\n"
-           "**核心优势**：在消除**椒盐噪声 (Salt-and-Pepper Noise)** 时极其有效，且比均值滤波更能保护边缘轮廓。";
+           "非线性滤波技术，取邻域所有像素灰度值排序后的中间值作为输出。\n"
+           "**特别擅长**：去除椒盐噪声 (Salt & Pepper Noise) 且有效保护边缘不被过度模糊。";
 }
 
 bool MedianBlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     int ksize = _params[0].GetInt();
-    if (ksize % 2 == 0) { ksize += 1; }
-    if (ksize < 3) { ksize = 3; }
+    if (ksize % 2 == 0) ksize += 1;
 
     try
     {
@@ -195,18 +188,24 @@ bool MedianBlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& e
 std::string MedianBlurOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     int ksize = _params[0].GetInt();
-    if (ksize % 2 == 0) { ksize += 1; }
+    if (ksize % 2 == 0) ksize += 1;
+
     std::stringstream ss;
-    ss << "cv::medianBlur(" << inVar << ", " << outVar << ", " << ksize << ");";
+    ss << "// 中值滤波参数配置 (去除椒盐噪声)\n"
+       << "int ksize = " << ksize << ";             // 窗口孔径大小 (奇数)\n"
+       << "cv::medianBlur(" << inVar << ", " << outVar << ", ksize);";
     return ss.str();
 }
 
 std::string MedianBlurOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     int ksize = _params[0].GetInt();
-    if (ksize % 2 == 0) { ksize += 1; }
+    if (ksize % 2 == 0) ksize += 1;
+
     std::stringstream ss;
-    ss << outVar << " = cv2.medianBlur(" << inVar << ", " << ksize << ")";
+    ss << "# 中值滤波参数配置 (去除椒盐噪声)\n"
+       << "ksize = " << ksize << "                 # 窗口孔径大小 (奇数)\n"
+       << outVar << " = cv2.medianBlur(" << inVar << ", ksize)";
     return ss.str();
 }
 
@@ -216,7 +215,6 @@ BilateralFilterOp::BilateralFilterOp()
     OpParameter dParam;
     dParam.Name = "d";
     dParam.DisplayName = "邻域直径 (d)";
-    dParam.Tooltip = "过滤期间使用的每个像素邻域的直径 (若为负数则由 sigmaSpace 决定)";
     dParam.Type = ParamType::IntSlider;
     dParam.Value = 9;
     dParam.MinValue = 1;
@@ -224,46 +222,38 @@ BilateralFilterOp::BilateralFilterOp()
     dParam.Step = 2;
     _params.push_back(dParam);
 
-    OpParameter sigmaColorParam;
-    sigmaColorParam.Name = "sigmaColor";
-    sigmaColorParam.DisplayName = "色彩标准差 (SigmaColor)";
-    sigmaColorParam.Tooltip = "颜色空间中的过滤标准差。值越大，更宽泛的颜色将被混合";
-    sigmaColorParam.Type = ParamType::DoubleSlider;
-    sigmaColorParam.Value = 75.0;
-    sigmaColorParam.MinValue = 10.0;
-    sigmaColorParam.MaxValue = 200.0;
-    sigmaColorParam.Step = 5.0;
-    _params.push_back(sigmaColorParam);
+    OpParameter scParam;
+    scParam.Name = "sigmaColor";
+    scParam.DisplayName = "颜色空间方差 (SigmaColor)";
+    scParam.Type = ParamType::DoubleSlider;
+    scParam.Value = 75.0;
+    scParam.MinValue = 10.0;
+    scParam.MaxValue = 200.0;
+    scParam.Step = 5.0;
+    _params.push_back(scParam);
 
-    OpParameter sigmaSpaceParam;
-    sigmaSpaceParam.Name = "sigmaSpace";
-    sigmaSpaceParam.DisplayName = "坐标空间标准差 (SigmaSpace)";
-    sigmaSpaceParam.Tooltip = "坐标空间中的过滤标准差。值越大，越远的像素相互影响";
-    sigmaSpaceParam.Type = ParamType::DoubleSlider;
-    sigmaSpaceParam.Value = 75.0;
-    sigmaSpaceParam.MinValue = 10.0;
-    sigmaSpaceParam.MaxValue = 200.0;
-    sigmaSpaceParam.Step = 5.0;
-    _params.push_back(sigmaSpaceParam);
+    OpParameter ssParam;
+    ssParam.Name = "sigmaSpace";
+    ssParam.DisplayName = "坐标空间方差 (SigmaSpace)";
+    ssParam.Type = ParamType::DoubleSlider;
+    ssParam.Value = 75.0;
+    ssParam.MinValue = 10.0;
+    ssParam.MaxValue = 200.0;
+    ssParam.Step = 5.0;
+    _params.push_back(ssParam);
 }
 
 std::string BilateralFilterOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：双边滤波 (bilateralFilter)\n\n"
-           "双边滤波是一种结合**空间距离**与**像素色彩相似度**的高阶非线性滤波：\n"
-           "* **空间权重**：距离中心越近，权重越大；\n"
-           "* **值域权重**：与中心像素颜色越接近，权重越大。\n\n"
-           "**效果**：在平滑平坦区域噪声的同时，由于边缘两侧颜色差异大导致值域权重接近0，因此**完美保留边缘陡峭度**（美颜磨皮经典算法）。";
+           "双边滤波结合了**空间邻近度**和**像素值相似度**双重高斯核：\n"
+           "* 平坦区域进行平滑降噪；\n"
+           "* 边缘区域由于像素差值大，权重趋向于 0，因此能完美**保留边缘结构**（磨皮美颜算法核心基础）。";
 }
 
 bool BilateralFilterOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     int d = _params[0].GetInt();
     double sigmaColor = _params[1].GetDouble();
     double sigmaSpace = _params[2].GetDouble();
@@ -287,7 +277,11 @@ std::string BilateralFilterOp::GenerateCppCode(const std::string& inVar, const s
     double sigmaSpace = _params[2].GetDouble();
 
     std::stringstream ss;
-    ss << "cv::bilateralFilter(" << inVar << ", " << outVar << ", " << d << ", " << sigmaColor << ", " << sigmaSpace << ");";
+    ss << "// 双边滤波 (保边去噪) 参数配置\n"
+       << "int d = " << d << ";                  // 滤波邻域直径\n"
+       << "double sigmaColor = " << sigmaColor << ";    // 颜色相似度权重方差\n"
+       << "double sigmaSpace = " << sigmaSpace << ";    // 空间距离权重方差\n"
+       << "cv::bilateralFilter(" << inVar << ", " << outVar << ", d, sigmaColor, sigmaSpace);";
     return ss.str();
 }
 
@@ -298,72 +292,59 @@ std::string BilateralFilterOp::GeneratePythonCode(const std::string& inVar, cons
     double sigmaSpace = _params[2].GetDouble();
 
     std::stringstream ss;
-    ss << outVar << " = cv2.bilateralFilter(" << inVar << ", " << d << ", " << sigmaColor << ", " << sigmaSpace << ")";
+    ss << "# 双边滤波 (保边去噪) 参数配置\n"
+       << "d = " << d << "                      # 滤波邻域直径\n"
+       << "sigma_color = " << sigmaColor << "          # 颜色相似度权重方差\n"
+       << "sigma_space = " << sigmaSpace << "          # 空间距离权重方差\n"
+       << outVar << " = cv2.bilateralFilter(" << inVar << ", d, sigma_color, sigma_space)";
     return ss.str();
 }
 
 // ---------------- Filter2DOp ----------------
 Filter2DOp::Filter2DOp()
 {
-    OpParameter presetParam;
-    presetParam.Name = "preset";
-    presetParam.DisplayName = "卷积核预设 (Kernel Preset)";
-    presetParam.Tooltip = "选择常用的 3x3 自定义滤波核";
-    presetParam.Type = ParamType::ComboBox;
-    presetParam.Value = 0;
-    presetParam.EnumOptions = {
-        "锐化核 (Sharpen)",
-        "浮雕核 (Emboss)",
-        "边缘增强核 (Edge Enhance)",
-        "高通滤波核 (High-Pass)"
+    OpParameter typeParam;
+    typeParam.Name = "type";
+    typeParam.DisplayName = "卷积核预设 (Kernel Type)";
+    typeParam.Type = ParamType::ComboBox;
+    typeParam.Value = 0;
+    typeParam.EnumOptions = {
+        "锐化核 (Sharpen 3x3)",
+        "浮雕效果 (Emboss 3x3)",
+        "高通滤波 (High-pass 3x3)",
+        "边缘增强 (Edge Enhance 3x3)"
     };
-    _params.push_back(presetParam);
+    _params.push_back(typeParam);
 }
 
 std::string Filter2DOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：2D 自定义卷积核 (filter2D)\n\n"
-           "对图像执行任意 2D 矩阵互相关运算：\n"
-           "$$\\text{dst}(x, y) = \\sum_{x', y'} K(x', y') \\cdot \\text{src}(x+x', y+y')$$\n"
-           "内置锐化核、浮雕效果、边缘提取等经典图像处理矩阵。";
+    return "### 📘 算子原理：自定义 2D 卷积滤波 (filter2D)\n\n"
+           "通过自定义 $3 \\times 3$ 卷积核与图像做二维互相关运算：\n"
+           "$$dst(x, y) = \\sum_{i} \\sum_{j} kernel(i, j) \\cdot src(x+i-anchor.x, y+j-anchor.y)$$";
 }
 
 bool Filter2DOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    int type = _params[0].GetInt();
 
-    int preset = _params[0].GetInt();
     cv::Mat kernel;
-
-    switch (preset)
+    if (type == 0) // Sharpen
     {
-        case 0: // 锐化
-            kernel = (cv::Mat_<float>(3, 3) <<  0, -1,  0,
-                                               -1,  5, -1,
-                                                0, -1,  0);
-            break;
-        case 1: // 浮雕
-            kernel = (cv::Mat_<float>(3, 3) << -2, -1,  0,
-                                               -1,  1,  1,
-                                                0,  1,  2);
-            break;
-        case 2: // 边缘增强
-            kernel = (cv::Mat_<float>(3, 3) << -1, -1, -1,
-                                               -1,  9, -1,
-                                               -1, -1, -1);
-            break;
-        case 3: // 高通
-            kernel = (cv::Mat_<float>(3, 3) << -1, -1, -1,
-                                               -1,  8, -1,
-                                               -1, -1, -1);
-            break;
-        default:
-            kernel = cv::Mat::eye(3, 3, CV_32F);
-            break;
+        kernel = (cv::Mat_<float>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
+    }
+    else if (type == 1) // Emboss
+    {
+        kernel = (cv::Mat_<float>(3, 3) << -2, -1, 0, -1, 1, 1, 0, 1, 2);
+    }
+    else if (type == 2) // Highpass
+    {
+        kernel = (cv::Mat_<float>(3, 3) << -1, -1, -1, -1, 8, -1, -1, -1, -1);
+    }
+    else // Edge enhance
+    {
+        kernel = (cv::Mat_<float>(3, 3) << 0, 0, 0, -1, 1, 0, 0, 0, 0);
     }
 
     try
@@ -380,28 +361,32 @@ bool Filter2DOp::Process(const cv::Mat& input, cv::Mat& output, std::string& err
 
 std::string Filter2DOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    int preset = _params[0].GetInt();
-    std::string kStr = "cv::Mat kernel = (cv::Mat_<float>(3,3) << 0,-1,0, -1,5,-1, 0,-1,0);";
-    if (preset == 1) kStr = "cv::Mat kernel = (cv::Mat_<float>(3,3) << -2,-1,0, -1,1,1, 0,1,2);";
-    else if (preset == 2) kStr = "cv::Mat kernel = (cv::Mat_<float>(3,3) << -1,-1,-1, -1,9,-1, -1,-1,-1);";
-    else if (preset == 3) kStr = "cv::Mat kernel = (cv::Mat_<float>(3,3) << -1,-1,-1, -1,8,-1, -1,-1,-1);";
+    int type = _params[0].GetInt();
+    std::string kInit = "0, -1, 0, -1, 5, -1, 0, -1, 0";
+    std::string desc = "锐化卷积核 (Sharpen 3x3)";
+    if (type == 1) { kInit = "-2, -1, 0, -1, 1, 1, 0, 1, 2"; desc = "浮雕卷积核 (Emboss 3x3)"; }
+    else if (type == 2) { kInit = "-1, -1, -1, -1, 8, -1, -1, -1, -1"; desc = "高通卷积核 (High-pass 3x3)"; }
+    else if (type == 3) { kInit = "0, 0, 0, -1, 1, 0, 0, 0, 0"; desc = "边缘增强卷积核 (Edge Enhance)"; }
 
     std::stringstream ss;
-    ss << kStr << "\n"
+    ss << "// 2D自定义卷积参数: " << desc << "\n"
+       << "cv::Mat kernel = (cv::Mat_<float>(3, 3) << " << kInit << ");\n"
        << "cv::filter2D(" << inVar << ", " << outVar << ", -1, kernel);";
     return ss.str();
 }
 
 std::string Filter2DOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    int preset = _params[0].GetInt();
-    std::string kStr = "kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)";
-    if (preset == 1) kStr = "kernel = np.array([[-2, -1, 0], [-1, 1, 1], [0, 1, 2]], dtype=np.float32)";
-    else if (preset == 2) kStr = "kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype=np.float32)";
-    else if (preset == 3) kStr = "kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]], dtype=np.float32)";
+    int type = _params[0].GetInt();
+    std::string kArr = "[[0, -1, 0], [-1, 5, -1], [0, -1, 0]]";
+    std::string desc = "锐化卷积核 (Sharpen 3x3)";
+    if (type == 1) { kArr = "[[-2, -1, 0], [-1, 1, 1], [0, 1, 2]]"; desc = "浮雕卷积核 (Emboss 3x3)"; }
+    else if (type == 2) { kArr = "[[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]]"; desc = "高通卷积核 (High-pass 3x3)"; }
+    else if (type == 3) { kArr = "[[0, 0, 0], [-1, 1, 0], [0, 0, 0]]"; desc = "边缘增强卷积核"; }
 
     std::stringstream ss;
-    ss << kStr << "\n"
+    ss << "# 2D自定义卷积参数: " << desc << "\n"
+       << "kernel = np.array(" << kArr << ", dtype=np.float32)\n"
        << outVar << " = cv2.filter2D(" << inVar << ", -1, kernel)";
     return ss.str();
 }

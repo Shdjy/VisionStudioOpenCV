@@ -62,24 +62,25 @@ void MainWindow::InitUiAndDocks()
     _dockHistogram->setWidget(_histogramWidget);
     addDockWidget(Qt::RightDockWidgetArea, _dockHistogram);
 
-    // 6. 底部 Dock: 代码生成
+    // 6. 底部 Dock: 代码生成 (默认停靠底部并折叠/隐藏，需要时唤出)
     _dockCode = new QDockWidget("多语言代码生成 (Code Generation)", this);
     _dockCode->setObjectName("dockCode");
     _codePreview = new CodePreviewWidget(_dockCode);
     _codePreview->SetPipelineManager(&_pipelineManager);
     _dockCode->setWidget(_codePreview);
     addDockWidget(Qt::BottomDockWidgetArea, _dockCode);
+    _dockCode->hide(); // 默认隐藏，扩大视口区域
 
-    // 7. 底部 Dock: 日志控制台
+    // 7. 底部 Dock: 日志控制台 (默认停靠底部并折叠/隐藏)
     _dockLog = new QDockWidget("运行日志与控制台 (Log Console)", this);
     _dockLog->setObjectName("dockLog");
     _logPanel = new LogPanelWidget(_dockLog);
     _dockLog->setWidget(_logPanel);
     addDockWidget(Qt::BottomDockWidgetArea, _dockLog);
+    _dockLog->hide(); // 默认隐藏
 
     // 拆分与堆叠优化
     tabifyDockWidget(_dockCode, _dockLog);
-    _dockCode->raise();
 
     tabifyDockWidget(_dockProperties, _dockHistogram);
     _dockProperties->raise();
@@ -89,8 +90,14 @@ void MainWindow::InitUiAndDocks()
     ui->menuView->addAction(_dockPipeline->toggleViewAction());
     ui->menuView->addAction(_dockProperties->toggleViewAction());
     ui->menuView->addAction(_dockHistogram->toggleViewAction());
+    ui->menuView->addSeparator();
     ui->menuView->addAction(_dockCode->toggleViewAction());
     ui->menuView->addAction(_dockLog->toggleViewAction());
+
+    // 主工具栏增加代码生成与日志控制台快捷显隐按钮
+    ui->mainToolBar->addSeparator();
+    ui->mainToolBar->addAction(_dockCode->toggleViewAction());
+    ui->mainToolBar->addAction(_dockLog->toggleViewAction());
 
     // 状态栏
     _lblStatusInfo = new QLabel("就绪", this);

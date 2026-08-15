@@ -1,43 +1,30 @@
 #include "MorphologyOps.h"
 #include <sstream>
 
-static cv::Mat GetStructuringElementFromParams(int shapeIdx, int ksize)
-{
-    int cvShape = cv::MORPH_RECT;
-    if (shapeIdx == 1) cvShape = cv::MORPH_CROSS;
-    else if (shapeIdx == 2) cvShape = cv::MORPH_ELLIPSE;
-
-    if (ksize < 1) ksize = 1;
-    return cv::getStructuringElement(cvShape, cv::Size(ksize, ksize));
-}
-
 // ---------------- DilateOp ----------------
 DilateOp::DilateOp()
 {
     OpParameter shapeParam;
     shapeParam.Name = "shape";
-    shapeParam.DisplayName = "核形状 (Shape)";
-    shapeParam.Tooltip = "结构元素几何形状";
+    shapeParam.DisplayName = "结构元形状 (Shape)";
     shapeParam.Type = ParamType::ComboBox;
     shapeParam.Value = 0;
-    shapeParam.EnumOptions = { "矩形 (MORPH_RECT)", "十字形 (MORPH_CROSS)", "椭圆形 (MORPH_ELLIPSE)" };
+    shapeParam.EnumOptions = { "矩形 (Rect)", "十字交叉 (Cross)", "椭圆 (Ellipse)" };
     _params.push_back(shapeParam);
 
     OpParameter ksizeParam;
     ksizeParam.Name = "ksize";
-    ksizeParam.DisplayName = "核大小 (Ksize)";
-    ksizeParam.Tooltip = "结构元素尺寸";
+    ksizeParam.DisplayName = "结构元尺寸 (Size)";
     ksizeParam.Type = ParamType::IntSlider;
     ksizeParam.Value = 3;
     ksizeParam.MinValue = 1;
     ksizeParam.MaxValue = 31;
-    ksizeParam.Step = 1;
+    ksizeParam.Step = 2;
     _params.push_back(ksizeParam);
 
     OpParameter iterParam;
     iterParam.Name = "iterations";
     iterParam.DisplayName = "迭代次数 (Iterations)";
-    iterParam.Tooltip = "膨胀重复执行次数";
     iterParam.Type = ParamType::IntSlider;
     iterParam.Value = 1;
     iterParam.MinValue = 1;
@@ -48,31 +35,28 @@ DilateOp::DilateOp()
 
 std::string DilateOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：图像膨胀 (dilate)\n\n"
-           "膨胀是形态学基础运算之一：\n"
-           "$$\\text{dst}(x,y) = \\max_{(x',y') \\in \\text{element}} \\text{src}(x+x', y+y')$$\n"
-           "**核心效果**：\n"
-           "1. 扩张图像中高亮白色区域；\n"
-           "2. 填补物体内部由于二值化产生的微小黑色孔洞与缝隙；\n"
-           "3. 连接临近的断裂细线。";
+    return "### 📘 算子原理：形态学膨胀 (dilate)\n\n"
+           "用结构元核在图像上滑动，输出为结构元覆盖区域内的**最大像素值**：\n"
+           "$$dst(x, y) = \\max_{(i, j) \\in kernel} src(x+i, y+j)$$\n"
+           "**效果**：扩大高亮（白色）目标连通域，填补前景物体内部孔洞与边缘缺口。";
 }
 
 bool DilateOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
-    int shape = _params[0].GetInt();
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    int shapeIdx = _params[0].GetInt();
     int ksize = _params[1].GetInt();
-    int iter = _params[2].GetInt();
-    cv::Mat element = GetStructuringElementFromParams(shape, ksize);
+    if (ksize % 2 == 0) ksize += 1;
+    int iters = _params[2].GetInt();
+
+    int cvShape = cv::MORPH_RECT;
+    if (shapeIdx == 1) cvShape = cv::MORPH_CROSS;
+    else if (shapeIdx == 2) cvShape = cv::MORPH_ELLIPSE;
 
     try
     {
-        cv::dilate(input, output, element, cv::Point(-1, -1), iter);
+        cv::Mat element = cv::getStructuringElement(cvShape, cv::Size(ksize, ksize));
+        cv::dilate(input, output, element, cv::Point(-1, -1), iters);
         return true;
     }
     catch (const cv::Exception& e)
@@ -84,31 +68,41 @@ bool DilateOp::Process(const cv::Mat& input, cv::Mat& output, std::string& error
 
 std::string DilateOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    int shape = _params[0].GetInt();
+    int shapeIdx = _params[0].GetInt();
     int ksize = _params[1].GetInt();
-    int iter = _params[2].GetInt();
+    if (ksize % 2 == 0) ksize += 1;
+    int iters = _params[2].GetInt();
     std::string shapeStr = "cv::MORPH_RECT";
-    if (shape == 1) shapeStr = "cv::MORPH_CROSS";
-    else if (shape == 2) shapeStr = "cv::MORPH_ELLIPSE";
+    if (shapeIdx == 1) shapeStr = "cv::MORPH_CROSS";
+    else if (shapeIdx == 2) shapeStr = "cv::MORPH_ELLIPSE";
 
     std::stringstream ss;
-    ss << "cv::Mat kernel_" << outVar << " = cv::getStructuringElement(" << shapeStr << ", cv::Size(" << ksize << ", " << ksize << "));\n"
-       << "cv::dilate(" << inVar << ", " << outVar << ", kernel_" << outVar << ", cv::Point(-1, -1), " << iter << ");";
+    ss << "// 形态学膨胀参数配置\n"
+       << "int morphShape = " << shapeStr << ";\n"
+       << "int ksize = " << ksize << ";             // 结构元尺寸\n"
+       << "int iterations = " << iters << ";        // 迭代次数\n"
+       << "cv::Mat element = cv::getStructuringElement(morphShape, cv::Size(ksize, ksize));\n"
+       << "cv::dilate(" << inVar << ", " << outVar << ", element, cv::Point(-1, -1), iterations);";
     return ss.str();
 }
 
 std::string DilateOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    int shape = _params[0].GetInt();
+    int shapeIdx = _params[0].GetInt();
     int ksize = _params[1].GetInt();
-    int iter = _params[2].GetInt();
+    if (ksize % 2 == 0) ksize += 1;
+    int iters = _params[2].GetInt();
     std::string shapeStr = "cv2.MORPH_RECT";
-    if (shape == 1) shapeStr = "cv2.MORPH_CROSS";
-    else if (shape == 2) shapeStr = "cv2.MORPH_ELLIPSE";
+    if (shapeIdx == 1) shapeStr = "cv2.MORPH_CROSS";
+    else if (shapeIdx == 2) shapeStr = "cv2.MORPH_ELLIPSE";
 
     std::stringstream ss;
-    ss << "kernel_" << outVar << " = cv2.getStructuringElement(" << shapeStr << ", (" << ksize << ", " << ksize << "))\n"
-       << outVar << " = cv2.dilate(" << inVar << ", kernel_" << outVar << ", iterations=" << iter << ")";
+    ss << "# 形态学膨胀参数配置\n"
+       << "morph_shape = " << shapeStr << "\n"
+       << "ksize = (" << ksize << ", " << ksize << ")         # 结构元尺寸\n"
+       << "iterations = " << iters << "             # 迭代次数\n"
+       << "element = cv2.getStructuringElement(morph_shape, ksize)\n"
+       << outVar << " = cv2.dilate(" << inVar << ", element, iterations=iterations)";
     return ss.str();
 }
 
@@ -117,28 +111,25 @@ ErodeOp::ErodeOp()
 {
     OpParameter shapeParam;
     shapeParam.Name = "shape";
-    shapeParam.DisplayName = "核形状 (Shape)";
-    shapeParam.Tooltip = "结构元素几何形状";
+    shapeParam.DisplayName = "结构元形状 (Shape)";
     shapeParam.Type = ParamType::ComboBox;
     shapeParam.Value = 0;
-    shapeParam.EnumOptions = { "矩形 (MORPH_RECT)", "十字形 (MORPH_CROSS)", "椭圆形 (MORPH_ELLIPSE)" };
+    shapeParam.EnumOptions = { "矩形 (Rect)", "十字交叉 (Cross)", "椭圆 (Ellipse)" };
     _params.push_back(shapeParam);
 
     OpParameter ksizeParam;
     ksizeParam.Name = "ksize";
-    ksizeParam.DisplayName = "核大小 (Ksize)";
-    ksizeParam.Tooltip = "结构元素尺寸";
+    ksizeParam.DisplayName = "结构元尺寸 (Size)";
     ksizeParam.Type = ParamType::IntSlider;
     ksizeParam.Value = 3;
     ksizeParam.MinValue = 1;
     ksizeParam.MaxValue = 31;
-    ksizeParam.Step = 1;
+    ksizeParam.Step = 2;
     _params.push_back(ksizeParam);
 
     OpParameter iterParam;
     iterParam.Name = "iterations";
     iterParam.DisplayName = "迭代次数 (Iterations)";
-    iterParam.Tooltip = "腐蚀重复执行次数";
     iterParam.Type = ParamType::IntSlider;
     iterParam.Value = 1;
     iterParam.MinValue = 1;
@@ -149,31 +140,28 @@ ErodeOp::ErodeOp()
 
 std::string ErodeOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：图像腐蚀 (erode)\n\n"
-           "腐蚀是形态学的收缩运算：\n"
-           "$$\\text{dst}(x,y) = \\min_{(x',y') \\in \\text{element}} \\text{src}(x+x', y+y')$$\n"
-           "**核心效果**：\n"
-           "1. 收缩高亮前景区域；\n"
-           "2. 消除二值图像中毛刺与细小孤立噪点；\n"
-           "3. 切断粘连在一起的相邻目标。";
+    return "### 📘 算子原理：形态学腐蚀 (erode)\n\n"
+           "用结构元核在图像上滑动，输出为结构元覆盖区域内的**最小像素值**：\n"
+           "$$dst(x, y) = \\min_{(i, j) \\in kernel} src(x+i, y+j)$$\n"
+           "**效果**：消除细小毛刺与噪点孤岛，分离粘连的前景物体。";
 }
 
 bool ErodeOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
-    int shape = _params[0].GetInt();
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    int shapeIdx = _params[0].GetInt();
     int ksize = _params[1].GetInt();
-    int iter = _params[2].GetInt();
-    cv::Mat element = GetStructuringElementFromParams(shape, ksize);
+    if (ksize % 2 == 0) ksize += 1;
+    int iters = _params[2].GetInt();
+
+    int cvShape = cv::MORPH_RECT;
+    if (shapeIdx == 1) cvShape = cv::MORPH_CROSS;
+    else if (shapeIdx == 2) cvShape = cv::MORPH_ELLIPSE;
 
     try
     {
-        cv::erode(input, output, element, cv::Point(-1, -1), iter);
+        cv::Mat element = cv::getStructuringElement(cvShape, cv::Size(ksize, ksize));
+        cv::erode(input, output, element, cv::Point(-1, -1), iters);
         return true;
     }
     catch (const cv::Exception& e)
@@ -185,31 +173,41 @@ bool ErodeOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorM
 
 std::string ErodeOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    int shape = _params[0].GetInt();
+    int shapeIdx = _params[0].GetInt();
     int ksize = _params[1].GetInt();
-    int iter = _params[2].GetInt();
+    if (ksize % 2 == 0) ksize += 1;
+    int iters = _params[2].GetInt();
     std::string shapeStr = "cv::MORPH_RECT";
-    if (shape == 1) shapeStr = "cv::MORPH_CROSS";
-    else if (shape == 2) shapeStr = "cv::MORPH_ELLIPSE";
+    if (shapeIdx == 1) shapeStr = "cv::MORPH_CROSS";
+    else if (shapeIdx == 2) shapeStr = "cv::MORPH_ELLIPSE";
 
     std::stringstream ss;
-    ss << "cv::Mat kernel_" << outVar << " = cv::getStructuringElement(" << shapeStr << ", cv::Size(" << ksize << ", " << ksize << "));\n"
-       << "cv::erode(" << inVar << ", " << outVar << ", kernel_" << outVar << ", cv::Point(-1, -1), " << iter << ");";
+    ss << "// 形态学腐蚀参数配置\n"
+       << "int morphShape = " << shapeStr << ";\n"
+       << "int ksize = " << ksize << ";             // 结构元尺寸\n"
+       << "int iterations = " << iters << ";        // 迭代次数\n"
+       << "cv::Mat element = cv::getStructuringElement(morphShape, cv::Size(ksize, ksize));\n"
+       << "cv::erode(" << inVar << ", " << outVar << ", element, cv::Point(-1, -1), iterations);";
     return ss.str();
 }
 
 std::string ErodeOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    int shape = _params[0].GetInt();
+    int shapeIdx = _params[0].GetInt();
     int ksize = _params[1].GetInt();
-    int iter = _params[2].GetInt();
+    if (ksize % 2 == 0) ksize += 1;
+    int iters = _params[2].GetInt();
     std::string shapeStr = "cv2.MORPH_RECT";
-    if (shape == 1) shapeStr = "cv2.MORPH_CROSS";
-    else if (shape == 2) shapeStr = "cv2.MORPH_ELLIPSE";
+    if (shapeIdx == 1) shapeStr = "cv2.MORPH_CROSS";
+    else if (shapeIdx == 2) shapeStr = "cv2.MORPH_ELLIPSE";
 
     std::stringstream ss;
-    ss << "kernel_" << outVar << " = cv2.getStructuringElement(" << shapeStr << ", (" << ksize << ", " << ksize << "))\n"
-       << outVar << " = cv2.erode(" << inVar << ", kernel_" << outVar << ", iterations=" << iter << ")";
+    ss << "# 形态学腐蚀参数配置\n"
+       << "morph_shape = " << shapeStr << "\n"
+       << "ksize = (" << ksize << ", " << ksize << ")         # 结构元尺寸\n"
+       << "iterations = " << iters << "             # 迭代次数\n"
+       << "element = cv2.getStructuringElement(morph_shape, ksize)\n"
+       << outVar << " = cv2.erode(" << inVar << ", element, iterations=iterations)";
     return ss.str();
 }
 
@@ -218,71 +216,56 @@ MorphologyExOp::MorphologyExOp()
 {
     OpParameter opParam;
     opParam.Name = "op";
-    opParam.DisplayName = "运算类型 (Operation)";
-    opParam.Tooltip = "形态学高级操作类型";
+    opParam.DisplayName = "形态学操作类型 (Operation)";
     opParam.Type = ParamType::ComboBox;
-    opParam.Value = 0;
+    opParam.Value = 0; // Open
     opParam.EnumOptions = {
-        "开运算 (MORPH_OPEN 先腐蚀后膨胀-去噪)",
-        "闭运算 (MORPH_CLOSE 先膨胀后腐蚀-填孔)",
-        "形态学梯度 (MORPH_GRADIENT 膨胀减腐蚀-提取边缘)",
-        "顶帽运算 (MORPH_TOPHAT 原图减开运算-提取高亮微细结构)",
-        "黑帽运算 (MORPH_BLACKHAT 闭运算减原图-提取暗部孔洞)",
-        "击中击不中 (MORPH_HITMISS 模板拓扑匹配)"
+        "开运算 (Open - 先腐蚀后膨胀: 消除孤立点)",
+        "闭运算 (Close - 先膨胀后腐蚀: 填充微小孔洞)",
+        "形态学梯度 (Gradient - 膨胀减腐蚀: 提取边缘轮廓)",
+        "顶帽运算 (TopHat - 原图减开运算: 提取高亮细小特征)",
+        "黑帽运算 (BlackHat - 闭运算减原图: 提取暗色细小特征)",
+        "击中击不中 (HitMiss - 形状精确结构模式匹配)"
     };
     _params.push_back(opParam);
 
     OpParameter shapeParam;
     shapeParam.Name = "shape";
-    shapeParam.DisplayName = "核形状 (Shape)";
-    shapeParam.Tooltip = "结构元素几何形状";
+    shapeParam.DisplayName = "结构元形状 (Shape)";
     shapeParam.Type = ParamType::ComboBox;
     shapeParam.Value = 0;
-    shapeParam.EnumOptions = { "矩形 (MORPH_RECT)", "十字形 (MORPH_CROSS)", "椭圆形 (MORPH_ELLIPSE)" };
+    shapeParam.EnumOptions = { "矩形 (Rect)", "十字交叉 (Cross)", "椭圆 (Ellipse)" };
     _params.push_back(shapeParam);
 
     OpParameter ksizeParam;
     ksizeParam.Name = "ksize";
-    ksizeParam.DisplayName = "核大小 (Ksize)";
-    ksizeParam.Tooltip = "结构元素尺寸";
+    ksizeParam.DisplayName = "结构元尺寸 (Size)";
     ksizeParam.Type = ParamType::IntSlider;
     ksizeParam.Value = 5;
     ksizeParam.MinValue = 1;
     ksizeParam.MaxValue = 31;
-    ksizeParam.Step = 1;
+    ksizeParam.Step = 2;
     _params.push_back(ksizeParam);
-
-    OpParameter iterParam;
-    iterParam.Name = "iterations";
-    iterParam.DisplayName = "迭代次数 (Iterations)";
-    iterParam.Tooltip = "重复执行次数";
-    iterParam.Type = ParamType::IntSlider;
-    iterParam.Value = 1;
-    iterParam.MinValue = 1;
-    iterParam.MaxValue = 10;
-    iterParam.Step = 1;
-    _params.push_back(iterParam);
 }
 
 std::string MorphologyExOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：高级形态学变换 (morphologyEx)\n\n"
-           "* **开运算 (Open)**：先腐蚀后膨胀 $\\text{open}(A) = (A \\ominus B) \\oplus B$，用于**消除细小噪点同时保持目标大小不变**。\n"
-           "* **闭运算 (Close)**：先膨胀后腐蚀 $\\text{close}(A) = (A \\oplus B) \\ominus B$，用于**填补细小空洞并闭合目标轮廓缝隙**。\n"
-           "* **形态学梯度 (Gradient)**：膨胀图减去腐蚀图，获得目标的**结构边缘轮廓**。\n"
-           "* **顶帽 (TopHat)**：原图减去开运算，用于**提取不均匀背景下的微小高亮特征**。\n"
-           "* **黑帽 (BlackHat)**：闭运算减去原图，用于**提取不均匀背景下的微小暗斑特征**。";
+           "* **开运算 (Open)**：$dst = open(src, element) = dilate(erode(src))$\n"
+           "* **闭运算 (Close)**：$dst = close(src, element) = erode(dilate(src))$\n"
+           "* **形态学梯度 (Gradient)**：$dst = dilate(src) - erode(src)$\n"
+           "* **顶帽 (TopHat)**：$dst = src - open(src)$\n"
+           "* **黑帽 (BlackHat)**：$dst = close(src) - src$";
 }
 
 bool MorphologyExOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     int opIdx = _params[0].GetInt();
+    int shapeIdx = _params[1].GetInt();
+    int ksize = _params[2].GetInt();
+    if (ksize % 2 == 0) ksize += 1;
+
     int cvOp = cv::MORPH_OPEN;
     if (opIdx == 1) cvOp = cv::MORPH_CLOSE;
     else if (opIdx == 2) cvOp = cv::MORPH_GRADIENT;
@@ -290,14 +273,14 @@ bool MorphologyExOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
     else if (opIdx == 4) cvOp = cv::MORPH_BLACKHAT;
     else if (opIdx == 5) cvOp = cv::MORPH_HITMISS;
 
-    int shape = _params[1].GetInt();
-    int ksize = _params[2].GetInt();
-    int iter = _params[3].GetInt();
-    cv::Mat element = GetStructuringElementFromParams(shape, ksize);
+    int cvShape = cv::MORPH_RECT;
+    if (shapeIdx == 1) cvShape = cv::MORPH_CROSS;
+    else if (shapeIdx == 2) cvShape = cv::MORPH_ELLIPSE;
 
     try
     {
-        cv::morphologyEx(input, output, cvOp, element, cv::Point(-1, -1), iter);
+        cv::Mat element = cv::getStructuringElement(cvShape, cv::Size(ksize, ksize));
+        cv::morphologyEx(input, output, cvOp, element);
         return true;
     }
     catch (const cv::Exception& e)
@@ -310,45 +293,53 @@ bool MorphologyExOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
 std::string MorphologyExOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     int opIdx = _params[0].GetInt();
-    std::string opStr = "cv::MORPH_OPEN";
-    if (opIdx == 1) opStr = "cv::MORPH_CLOSE";
-    else if (opIdx == 2) opStr = "cv::MORPH_GRADIENT";
-    else if (opIdx == 3) opStr = "cv::MORPH_TOPHAT";
-    else if (opIdx == 4) opStr = "cv::MORPH_BLACKHAT";
-    else if (opIdx == 5) opStr = "cv::MORPH_HITMISS";
-
-    int shape = _params[1].GetInt();
+    int shapeIdx = _params[1].GetInt();
     int ksize = _params[2].GetInt();
-    int iter = _params[3].GetInt();
-    std::string shapeStr = "cv::MORPH_RECT";
-    if (shape == 1) shapeStr = "cv::MORPH_CROSS";
-    else if (shape == 2) shapeStr = "cv::MORPH_ELLIPSE";
+    if (ksize % 2 == 0) ksize += 1;
+
+    std::string opStr = "cv::MORPH_OPEN";
+    std::string desc = "开运算 (先腐蚀后膨胀)";
+    if (opIdx == 1) { opStr = "cv::MORPH_CLOSE"; desc = "闭运算 (先膨胀后腐蚀)"; }
+    else if (opIdx == 2) { opStr = "cv::MORPH_GRADIENT"; desc = "形态学梯度 (提取边缘)"; }
+    else if (opIdx == 3) { opStr = "cv::MORPH_TOPHAT"; desc = "顶帽运算"; }
+    else if (opIdx == 4) { opStr = "cv::MORPH_BLACKHAT"; desc = "黑帽运算"; }
+    else if (opIdx == 5) { opStr = "cv::MORPH_HITMISS"; desc = "击中击不中"; }
+
+    std::string shapeStr = (shapeIdx == 1) ? "cv::MORPH_CROSS" : (shapeIdx == 2 ? "cv::MORPH_ELLIPSE" : "cv::MORPH_RECT");
 
     std::stringstream ss;
-    ss << "cv::Mat kernel_" << outVar << " = cv::getStructuringElement(" << shapeStr << ", cv::Size(" << ksize << ", " << ksize << "));\n"
-       << "cv::morphologyEx(" << inVar << ", " << outVar << ", " << opStr << ", kernel_" << outVar << ", cv::Point(-1, -1), " << iter << ");";
+    ss << "// 高级形态学操作: " << desc << "\n"
+       << "int morphOp = " << opStr << ";\n"
+       << "int morphShape = " << shapeStr << ";\n"
+       << "int ksize = " << ksize << ";             // 结构元尺寸\n"
+       << "cv::Mat element = cv::getStructuringElement(morphShape, cv::Size(ksize, ksize));\n"
+       << "cv::morphologyEx(" << inVar << ", " << outVar << ", morphOp, element);";
     return ss.str();
 }
 
 std::string MorphologyExOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     int opIdx = _params[0].GetInt();
-    std::string opStr = "cv2.MORPH_OPEN";
-    if (opIdx == 1) opStr = "cv2.MORPH_CLOSE";
-    else if (opIdx == 2) opStr = "cv2.MORPH_GRADIENT";
-    else if (opIdx == 3) opStr = "cv2.MORPH_TOPHAT";
-    else if (opIdx == 4) opStr = "cv2.MORPH_BLACKHAT";
-    else if (opIdx == 5) opStr = "cv2.MORPH_HITMISS";
-
-    int shape = _params[1].GetInt();
+    int shapeIdx = _params[1].GetInt();
     int ksize = _params[2].GetInt();
-    int iter = _params[3].GetInt();
-    std::string shapeStr = "cv2.MORPH_RECT";
-    if (shape == 1) shapeStr = "cv2.MORPH_CROSS";
-    else if (shape == 2) shapeStr = "cv2.MORPH_ELLIPSE";
+    if (ksize % 2 == 0) ksize += 1;
+
+    std::string opStr = "cv2.MORPH_OPEN";
+    std::string desc = "开运算 (先腐蚀后膨胀)";
+    if (opIdx == 1) { opStr = "cv2.MORPH_CLOSE"; desc = "闭运算"; }
+    else if (opIdx == 2) { opStr = "cv2.MORPH_GRADIENT"; desc = "形态学梯度"; }
+    else if (opIdx == 3) { opStr = "cv2.MORPH_TOPHAT"; desc = "顶帽运算"; }
+    else if (opIdx == 4) { opStr = "cv2.MORPH_BLACKHAT"; desc = "黑帽运算"; }
+    else if (opIdx == 5) { opStr = "cv2.MORPH_HITMISS"; desc = "击中击不中"; }
+
+    std::string shapeStr = (shapeIdx == 1) ? "cv2.MORPH_CROSS" : (shapeIdx == 2 ? "cv2.MORPH_ELLIPSE" : "cv2.MORPH_RECT");
 
     std::stringstream ss;
-    ss << "kernel_" << outVar << " = cv2.getStructuringElement(" << shapeStr << ", (" << ksize << ", " << ksize << "))\n"
-       << outVar << " = cv2.morphologyEx(" << inVar << ", " << opStr << ", kernel_" << outVar << ", iterations=" << iter << ")";
+    ss << "# 高级形态学操作: " << desc << "\n"
+       << "morph_op = " << opStr << "\n"
+       << "morph_shape = " << shapeStr << "\n"
+       << "ksize = (" << ksize << ", " << ksize << ")         # 结构元尺寸\n"
+       << "element = cv2.getStructuringElement(morph_shape, ksize)\n"
+       << outVar << " = cv2.morphologyEx(" << inVar << ", morph_op, element)";
     return ss.str();
 }

@@ -5,88 +5,75 @@ FindContoursOp::FindContoursOp()
 {
     OpParameter modeParam;
     modeParam.Name = "mode";
-    modeParam.DisplayName = "检索模式 (RetrievalMode)";
-    modeParam.Tooltip = "轮廓拓扑层级检索方式";
+    modeParam.DisplayName = "检索模式 (Retrieval Mode)";
     modeParam.Type = ParamType::ComboBox;
     modeParam.Value = 0; // RETR_EXTERNAL
     modeParam.EnumOptions = {
-        "仅检测最外层轮廓 (RETR_EXTERNAL)",
-        "检测所有轮廓并保存为列表 (RETR_LIST)",
-        "检测所有轮廓并建立双层层级 (RETR_CCOMP)",
-        "检测所有轮廓并重建完整树状层级 (RETR_TREE)"
+        "RETR_EXTERNAL (仅最外层轮廓)",
+        "RETR_LIST (检测所有轮廓不建立树)",
+        "RETR_CCOMP (两级层级结构)",
+        "RETR_TREE (完整嵌套层级树)"
     };
     _params.push_back(modeParam);
 
+    OpParameter methodParam;
+    methodParam.Name = "method";
+    methodParam.DisplayName = "近似方法 (Approximation)";
+    methodParam.Type = ParamType::ComboBox;
+    methodParam.Value = 1; // CHAIN_APPROX_SIMPLE
+    methodParam.EnumOptions = {
+        "CHAIN_APPROX_NONE (保留所有点)",
+        "CHAIN_APPROX_SIMPLE (压缩水平/垂直/对角线)"
+    };
+    _params.push_back(methodParam);
+
     OpParameter minAreaParam;
     minAreaParam.Name = "minArea";
-    minAreaParam.DisplayName = "最小面积过滤 (MinArea)";
-    minAreaParam.Tooltip = "过滤面积小于此阈值的细小噪点轮廓 (像素数)";
-    minAreaParam.Type = ParamType::IntSlider;
-    minAreaParam.Value = 100;
-    minAreaParam.MinValue = 0;
-    minAreaParam.MaxValue = 10000;
-    minAreaParam.Step = 50;
+    minAreaParam.DisplayName = "最小面积过滤 (Min Area px²)";
+    minAreaParam.Type = ParamType::DoubleSlider;
+    minAreaParam.Value = 50.0;
+    minAreaParam.MinValue = 0.0;
+    minAreaParam.MaxValue = 10000.0;
+    minAreaParam.Step = 10.0;
     _params.push_back(minAreaParam);
 
     OpParameter drawTypeParam;
     drawTypeParam.Name = "drawType";
-    drawTypeParam.DisplayName = "绘制特征类型 (DrawType)";
-    drawTypeParam.Tooltip = "选择要在图像上绘制的几何特征图形";
+    drawTypeParam.DisplayName = "绘制拟合几何 (Geometry Overlay)";
     drawTypeParam.Type = ParamType::ComboBox;
     drawTypeParam.Value = 0;
     drawTypeParam.EnumOptions = {
-        "绘制轮廓线条 (Contours)",
-        "绘制外接正矩形 (Bounding Rect)",
-        "绘制最小旋转矩形 (Min Area Rect)",
-        "绘制最小外接圆 (Min Enclosing Circle)",
-        "绘制凸包多边形 (Convex Hull)"
+        "仅轮廓线条 (Contour Curves)",
+        "正外接矩形 (Bounding Rect)",
+        "最小面积旋转矩形 (MinAreaRect)",
+        "最小外接圆 (MinEnclosingCircle)",
+        "凸包多边形 (Convex Hull)"
     };
     _params.push_back(drawTypeParam);
-
-    OpParameter thicknessParam;
-    thicknessParam.Name = "thickness";
-    thicknessParam.DisplayName = "线条粗细 (Thickness)";
-    thicknessParam.Tooltip = "绘制线条的像素宽度";
-    thicknessParam.Type = ParamType::IntSlider;
-    thicknessParam.Value = 2;
-    thicknessParam.MinValue = 1;
-    thicknessParam.MaxValue = 10;
-    thicknessParam.Step = 1;
-    _params.push_back(thicknessParam);
 }
 
 std::string FindContoursOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：轮廓查找与分析 (findContours)\n\n"
-           "基于拓扑结构分析算法（如 Suzuki85 算法）从二值图像中提取边界像素序列。\n"
-           "**后续几何测量能力**：\n"
-           "* **面积与周长**：`contourArea()`, `arcLength()`；\n"
-           "* **包络与拟合**：外接矩形 `boundingRect()`、旋转矩形 `minAreaRect()`、最小外接圆 `minEnclosingCircle()`、凸包 `convexHull()`。";
+    return "### 📘 算子原理：轮廓提取与几何拓扑分析 (findContours)\n\n"
+           "基于拓扑结构分析算法在二值图像中提取目标边界曲线：\n"
+           "* **外接几何拟合**：正矩形 `boundingRect`、旋转矩形 `minAreaRect`、外接圆 `minEnclosingCircle`、凸包 `convexHull`；\n"
+           "* **几何测量**：轮廓面积 `contourArea`、周长 `arcLength`，广泛用于工业尺寸测量与瑕疵检测。";
 }
 
 bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+
+    cv::Mat binImg;
+    if (input.channels() == 1)
     {
-        errorMsg = "输入图像为空";
-        return false;
+        binImg = input.clone();
+    }
+    else
+    {
+        cv::cvtColor(input, binImg, cv::COLOR_BGR2GRAY);
     }
 
-    cv::Mat gray;
-    if (input.channels() > 1) { cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY); }
-    else { gray = input.clone(); }
-
-    int modeIdx = _params[0].GetInt();
-    int cvMode = cv::RETR_EXTERNAL;
-    if (modeIdx == 1) cvMode = cv::RETR_LIST;
-    else if (modeIdx == 2) cvMode = cv::RETR_CCOMP;
-    else if (modeIdx == 3) cvMode = cv::RETR_TREE;
-
-    double minArea = _params[1].GetInt();
-    int drawType = _params[2].GetInt();
-    int thickness = _params[3].GetInt();
-
-    // 准备彩色画布
     if (input.channels() == 1)
     {
         cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
@@ -96,52 +83,61 @@ bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
         output = input.clone();
     }
 
+    int modeIdx = _params[0].GetInt();
+    int methodIdx = _params[1].GetInt();
+    double minArea = _params[2].GetDouble();
+    int drawType = _params[3].GetInt();
+
+    int cvMode = cv::RETR_EXTERNAL;
+    if (modeIdx == 1) cvMode = cv::RETR_LIST;
+    else if (modeIdx == 2) cvMode = cv::RETR_CCOMP;
+    else if (modeIdx == 3) cvMode = cv::RETR_TREE;
+
+    int cvMethod = (methodIdx == 0) ? cv::CHAIN_APPROX_NONE : cv::CHAIN_APPROX_SIMPLE;
+
     try
     {
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
-        cv::findContours(gray, contours, hierarchy, cvMode, cv::CHAIN_APPROX_SIMPLE);
+        cv::findContours(binImg, contours, hierarchy, cvMode, cvMethod);
 
         for (size_t i = 0; i < contours.size(); ++i)
         {
             double area = cv::contourArea(contours[i]);
-            if (area < minArea)
-            {
-                continue;
-            }
+            if (area < minArea) continue;
 
-            if (drawType == 0) // 绘制轮廓线
+            if (drawType == 0) // 轮廓
             {
-                cv::drawContours(output, contours, static_cast<int>(i), cv::Scalar(0, 255, 0), thickness);
+                cv::drawContours(output, contours, static_cast<int>(i), cv::Scalar(0, 255, 0), 2);
             }
-            else if (drawType == 1) // 正矩形
+            else if (drawType == 1) // 正外接矩形
             {
-                cv::Rect rect = cv::boundingRect(contours[i]);
-                cv::rectangle(output, rect, cv::Scalar(0, 0, 255), thickness);
+                cv::Rect r = cv::boundingRect(contours[i]);
+                cv::rectangle(output, r, cv::Scalar(0, 0, 255), 2);
             }
-            else if (drawType == 2) // 最小旋转矩形
+            else if (drawType == 2) // 旋转矩形
             {
-                cv::RotatedRect rotRect = cv::minAreaRect(contours[i]);
+                cv::RotatedRect r = cv::minAreaRect(contours[i]);
                 cv::Point2f pts[4];
-                rotRect.points(pts);
+                r.points(pts);
                 for (int j = 0; j < 4; ++j)
                 {
-                    cv::line(output, pts[j], pts[(j + 1) % 4], cv::Scalar(255, 0, 0), thickness);
+                    cv::line(output, pts[j], pts[(j + 1) % 4], cv::Scalar(255, 255, 0), 2);
                 }
             }
-            else if (drawType == 3) // 最小外接圆
+            else if (drawType == 3) // 外接圆
             {
                 cv::Point2f center;
                 float radius;
                 cv::minEnclosingCircle(contours[i], center, radius);
-                cv::circle(output, center, static_cast<int>(radius), cv::Scalar(255, 255, 0), thickness);
+                cv::circle(output, center, static_cast<int>(radius), cv::Scalar(255, 0, 255), 2);
             }
             else if (drawType == 4) // 凸包
             {
                 std::vector<cv::Point> hull;
                 cv::convexHull(contours[i], hull);
-                std::vector<std::vector<cv::Point>> hullList = { hull };
-                cv::drawContours(output, hullList, 0, cv::Scalar(255, 0, 255), thickness);
+                std::vector<std::vector<cv::Point>> hulls = { hull };
+                cv::drawContours(output, hulls, 0, cv::Scalar(0, 255, 255), 2);
             }
         }
         return true;
@@ -156,51 +152,52 @@ bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
 std::string FindContoursOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     int modeIdx = _params[0].GetInt();
-    std::string modeStr = "cv::RETR_EXTERNAL";
-    if (modeIdx == 1) modeStr = "cv::RETR_LIST";
-    else if (modeIdx == 2) modeStr = "cv::RETR_CCOMP";
-    else if (modeIdx == 3) modeStr = "cv::RETR_TREE";
+    int methodIdx = _params[1].GetInt();
+    double minArea = _params[2].GetDouble();
+    int drawType = _params[3].GetInt();
 
-    int minArea = _params[1].GetInt();
-    int drawType = _params[2].GetInt();
-    int thickness = _params[3].GetInt();
+    std::string modeStr = (modeIdx == 1 ? "cv::RETR_LIST" : (modeIdx == 2 ? "cv::RETR_CCOMP" : (modeIdx == 3 ? "cv::RETR_TREE" : "cv::RETR_EXTERNAL")));
+    std::string methodStr = (methodIdx == 0 ? "cv::CHAIN_APPROX_NONE" : "cv::CHAIN_APPROX_SIMPLE");
 
     std::stringstream ss;
-    ss << "cv::Mat gray_" << outVar << ";\n"
-       << "if (" << inVar << ".channels() > 1) cv::cvtColor(" << inVar << ", gray_" << outVar << ", cv::COLOR_BGR2GRAY);\n"
-       << "else gray_" << outVar << " = " << inVar << ".clone();\n"
-       << "if (" << inVar << ".channels() == 1) cv::cvtColor(" << inVar << ", " << outVar << ", cv::COLOR_GRAY2BGR);\n"
-       << "else " << outVar << " = " << inVar << ".clone();\n"
-       << "std::vector<std::vector<cv::Point>> contours_" << outVar << ";\n"
-       << "std::vector<cv::Vec4i> hierarchy_" << outVar << ";\n"
-       << "cv::findContours(gray_" << outVar << ", contours_" << outVar << ", hierarchy_" << outVar << ", " << modeStr << ", cv::CHAIN_APPROX_SIMPLE);\n"
-       << "for (size_t i = 0; i < contours_" << outVar << ".size(); ++i)\n"
-       << "{\n"
-       << "    if (cv::contourArea(contours_" << outVar << "[i]) < " << minArea << ") continue;\n";
-
+    ss << "// 轮廓查找与几何分析参数配置\n"
+       << "int contourMode = " << modeStr << ";\n"
+       << "int contourMethod = " << methodStr << ";\n"
+       << "double minAreaThreshold = " << minArea << "; // 最小面积过滤门限 (px²)\n"
+       << "std::vector<std::vector<cv::Point>> contours;\n"
+       << "std::vector<cv::Vec4i> hierarchy;\n"
+       << "cv::findContours(" << inVar << ", contours, hierarchy, contourMode, contourMethod);\n"
+       << "cv::cvtColor(" << inVar << ", " << outVar << ", cv::COLOR_GRAY2BGR);\n"
+       << "for (size_t i = 0; i < contours.size(); ++i) {\n"
+       << "    if (cv::contourArea(contours[i]) < minAreaThreshold) continue;\n";
     if (drawType == 0)
-        ss << "    cv::drawContours(" << outVar << ", contours_" << outVar << ", static_cast<int>(i), cv::Scalar(0, 255, 0), " << thickness << ");\n";
+    {
+        ss << "    cv::drawContours(" << outVar << ", contours, (int)i, cv::Scalar(0, 255, 0), 2);\n";
+    }
     else if (drawType == 1)
-        ss << "    cv::rectangle(" << outVar << ", cv::boundingRect(contours_" << outVar << "[i]), cv::Scalar(0, 0, 255), " << thickness << ");\n";
+    {
+        ss << "    cv::Rect r = cv::boundingRect(contours[i]);\n"
+           << "    cv::rectangle(" << outVar << ", r, cv::Scalar(0, 0, 255), 2);\n";
+    }
     else if (drawType == 2)
     {
-        ss << "    cv::RotatedRect rr = cv::minAreaRect(contours_" << outVar << "[i]);\n"
-           << "    cv::Point2f pts[4]; rr.points(pts);\n"
-           << "    for(int j = 0; j < 4; ++j) cv::line(" << outVar << ", pts[j], pts[(j+1)%4], cv::Scalar(255, 0, 0), " << thickness << ");\n";
+        ss << "    cv::RotatedRect r = cv::minAreaRect(contours[i]);\n"
+           << "    cv::Point2f pts[4]; r.points(pts);\n"
+           << "    for (int j = 0; j < 4; ++j) cv::line(" << outVar << ", pts[j], pts[(j+1)%4], cv::Scalar(255, 255, 0), 2);\n";
     }
     else if (drawType == 3)
     {
-        ss << "    cv::Point2f c; float r;\n"
-           << "    cv::minEnclosingCircle(contours_" << outVar << "[i], c, r);\n"
-           << "    cv::circle(" << outVar << ", c, static_cast<int>(r), cv::Scalar(255, 255, 0), " << thickness << ");\n";
+        ss << "    cv::Point2f center; float radius;\n"
+           << "    cv::minEnclosingCircle(contours[i], center, radius);\n"
+           << "    cv::circle(" << outVar << ", center, (int)radius, cv::Scalar(255, 0, 255), 2);\n";
     }
-    else if (drawType == 4)
+    else
     {
-        ss << "    std::vector<cv::Point> hull; cv::convexHull(contours_" << outVar << "[i], hull);\n"
-           << "    std::vector<std::vector<cv::Point>> hList = {hull};\n"
-           << "    cv::drawContours(" << outVar << ", hList, 0, cv::Scalar(255, 0, 255), " << thickness << ");\n";
+        ss << "    std::vector<cv::Point> hull;\n"
+           << "    cv::convexHull(contours[i], hull);\n"
+           << "    std::vector<std::vector<cv::Point>> hulls = { hull };\n"
+           << "    cv::drawContours(" << outVar << ", hulls, 0, cv::Scalar(0, 255, 255), 2);\n";
     }
-
     ss << "}";
     return ss.str();
 }
@@ -208,39 +205,47 @@ std::string FindContoursOp::GenerateCppCode(const std::string& inVar, const std:
 std::string FindContoursOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     int modeIdx = _params[0].GetInt();
-    std::string modeStr = "cv2.RETR_EXTERNAL";
-    if (modeIdx == 1) modeStr = "cv2.RETR_LIST";
-    else if (modeIdx == 2) modeStr = "cv2.RETR_CCOMP";
-    else if (modeIdx == 3) modeStr = "cv2.RETR_TREE";
+    int methodIdx = _params[1].GetInt();
+    double minArea = _params[2].GetDouble();
+    int drawType = _params[3].GetInt();
 
-    int minArea = _params[1].GetInt();
-    int drawType = _params[2].GetInt();
-    int thickness = _params[3].GetInt();
+    std::string modeStr = (modeIdx == 1 ? "cv2.RETR_LIST" : (modeIdx == 2 ? "cv2.RETR_CCOMP" : (modeIdx == 3 ? "cv2.RETR_TREE" : "cv2.RETR_EXTERNAL")));
+    std::string methodStr = (methodIdx == 0 ? "cv2.CHAIN_APPROX_NONE" : "cv2.CHAIN_APPROX_SIMPLE");
 
     std::stringstream ss;
-    ss << "gray = cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2GRAY) if len(" << inVar << ".shape) == 3 else " << inVar << "\n"
-       << outVar << " = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR) if len(" << inVar << ".shape) == 2 else " << inVar << ".copy()\n"
-       << "contours, hierarchy = cv2.findContours(gray, " << modeStr << ", cv2.CHAIN_APPROX_SIMPLE)\n"
-       << "for c in contours:\n"
-       << "    if cv2.contourArea(c) < " << minArea << ":\n"
+    ss << "# 轮廓查找与几何分析参数配置\n"
+       << "contour_mode = " << modeStr << "\n"
+       << "contour_method = " << methodStr << "\n"
+       << "min_area_thresh = " << minArea << "        # 最小面积过滤门限\n"
+       << "contours, hierarchy = cv2.findContours(" << inVar << ", contour_mode, contour_method)\n"
+       << outVar << " = cv2.cvtColor(" << inVar << ", cv2.COLOR_GRAY2BGR) if len(" << inVar << ".shape) == 2 else " << inVar << ".copy()\n"
+       << "for cnt in contours:\n"
+       << "    if cv2.contourArea(cnt) < min_area_thresh:\n"
        << "        continue\n";
-
     if (drawType == 0)
-        ss << "    cv2.drawContours(" << outVar << ", [c], -1, (0, 255, 0), " << thickness << ")\n";
+    {
+        ss << "    cv2.drawContours(" << outVar << ", [cnt], 0, (0, 255, 0), 2)\n";
+    }
     else if (drawType == 1)
-        ss << "    x, y, w, h = cv2.boundingRect(c)\n    cv2.rectangle(" << outVar << ", (x, y), (x + w, y + h), (0, 0, 255), " << thickness << ")\n";
+    {
+        ss << "    x, y, w, h = cv2.boundingRect(cnt)\n"
+           << "    cv2.rectangle(" << outVar << ", (x, y), (x + w, y + h), (0, 0, 255), 2)\n";
+    }
     else if (drawType == 2)
     {
-        ss << "    rect = cv2.minAreaRect(c)\n    box = np.int0(cv2.boxPoints(rect))\n    cv2.drawContours(" << outVar << ", [box], 0, (255, 0, 0), " << thickness << ")\n";
+        ss << "    rect = cv2.minAreaRect(cnt)\n"
+           << "    box = np.int0(cv2.boxPoints(rect))\n"
+           << "    cv2.drawContours(" << outVar << ", [box], 0, (255, 255, 0), 2)\n";
     }
     else if (drawType == 3)
     {
-        ss << "    (x, y), r = cv2.minEnclosingCircle(c)\n    cv2.circle(" << outVar << ", (int(x), int(y)), int(r), (255, 255, 0), " << thickness << ")\n";
+        ss << "    (x, y), radius = cv2.minEnclosingCircle(cnt)\n"
+           << "    cv2.circle(" << outVar << ", (int(x), int(y)), int(radius), (255, 0, 255), 2)\n";
     }
-    else if (drawType == 4)
+    else
     {
-        ss << "    hull = cv2.convexHull(c)\n    cv2.drawContours(" << outVar << ", [hull], 0, (255, 0, 255), " << thickness << ")\n";
+        ss << "    hull = cv2.convexHull(cnt)\n"
+           << "    cv2.drawContours(" << outVar << ", [hull], 0, (0, 255, 255), 2)\n";
     }
-
     return ss.str();
 }

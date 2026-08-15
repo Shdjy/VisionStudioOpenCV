@@ -5,8 +5,18 @@
 #include "ui/MainWindow.h"
 #include "utils/Logger.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 int main(int argc, char* argv[])
 {
+#ifdef _WIN32
+    // 修复 Windows 控制台中文输出乱码
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
@@ -41,9 +51,9 @@ int main(int argc, char* argv[])
         }
     }
 
-    // 3. 启动主窗口
+    // 3. 启动主窗口 (默认最大化显示)
     MainWindow mainWindow;
-    mainWindow.show();
+    mainWindow.showMaximized();
 
     return app.exec();
 }

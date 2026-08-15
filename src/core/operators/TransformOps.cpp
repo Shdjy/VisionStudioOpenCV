@@ -7,56 +7,46 @@ ResizeOp::ResizeOp()
     OpParameter scaleParam;
     scaleParam.Name = "scale";
     scaleParam.DisplayName = "缩放比例 (Scale)";
-    scaleParam.Tooltip = "缩放倍数 (0.1 ~ 5.0)";
     scaleParam.Type = ParamType::DoubleSlider;
-    scaleParam.Value = 0.5;
+    scaleParam.Value = 1.0;
     scaleParam.MinValue = 0.1;
-    scaleParam.MaxValue = 4.0;
+    scaleParam.MaxValue = 5.0;
     scaleParam.Step = 0.05;
     _params.push_back(scaleParam);
 
     OpParameter interpParam;
     interpParam.Name = "interpolation";
-    interpParam.DisplayName = "插值方式 (Interpolation)";
-    interpParam.Tooltip = "像素重采样算法";
+    interpParam.DisplayName = "插值算法 (Interpolation)";
     interpParam.Type = ParamType::ComboBox;
     interpParam.Value = 1; // Linear
     interpParam.EnumOptions = {
-        "最近邻插值 (INTER_NEAREST - 速度最快)",
-        "双线性插值 (INTER_LINEAR - 推荐默认)",
-        "双三次插值 (INTER_CUBIC - 放大效果好)",
-        "区域像素重采样 (INTER_AREA - 缩小效果最佳)",
-        "Lanczos插值 (INTER_LANCZOS4 - 高保真)"
+        "最近邻插值 (Nearest)",
+        "双线性插值 (Linear - 推荐)",
+        "双三次插值 (Cubic - 高画质)",
+        "区域像素重采样 (Area - 缩小专用)"
     };
     _params.push_back(interpParam);
 }
 
 std::string ResizeOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：图像缩放 (resize)\n\n"
-           "调整图像的像素空间分辨率：\n"
-           "* **INTER_NEAREST**：取最近像素点，计算极快但存在马赛克；\n"
-           "* **INTER_LINEAR**：双线性插值，平衡速度与画质；\n"
-           "* **INTER_AREA**：基于像素区域重采样的缩小算法，避免摩尔纹失真；\n"
-           "* **INTER_CUBIC**：4x4 邻域双三次插值，放大时更加平滑。";
+    return "### 📘 算子原理：几何缩放 (resize)\n\n"
+           "* **最近邻 (NEAREST)**：速度最快，有马赛克锯齿。\n"
+           "* **双线性 (LINEAR)**：取 $2 \\times 2$ 邻域加权，速度与画质均衡。\n"
+           "* **双三次 (CUBIC)**：取 $4 \\times 4$ 邻域三次样条插值，边缘平滑。\n"
+           "* **区域插值 (AREA)**：图像缩小采样时能有效避免莫尔纹伪影。";
 }
 
 bool ResizeOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     double scale = _params[0].GetDouble();
-    if (scale <= 0.01) { scale = 0.01; }
     int interpIdx = _params[1].GetInt();
+
     int cvInterp = cv::INTER_LINEAR;
     if (interpIdx == 0) cvInterp = cv::INTER_NEAREST;
     else if (interpIdx == 2) cvInterp = cv::INTER_CUBIC;
     else if (interpIdx == 3) cvInterp = cv::INTER_AREA;
-    else if (interpIdx == 4) cvInterp = cv::INTER_LANCZOS4;
 
     try
     {
@@ -78,10 +68,12 @@ std::string ResizeOp::GenerateCppCode(const std::string& inVar, const std::strin
     if (interpIdx == 0) interpStr = "cv::INTER_NEAREST";
     else if (interpIdx == 2) interpStr = "cv::INTER_CUBIC";
     else if (interpIdx == 3) interpStr = "cv::INTER_AREA";
-    else if (interpIdx == 4) interpStr = "cv::INTER_LANCZOS4";
 
     std::stringstream ss;
-    ss << "cv::resize(" << inVar << ", " << outVar << ", cv::Size(), " << scale << ", " << scale << ", " << interpStr << ");";
+    ss << "// 几何图像缩放参数配置\n"
+       << "double scaleFactor = " << scale << ";        // 缩放比例因子\n"
+       << "int interpolation = " << interpStr << ";\n"
+       << "cv::resize(" << inVar << ", " << outVar << ", cv::Size(), scaleFactor, scaleFactor, interpolation);";
     return ss.str();
 }
 
@@ -93,10 +85,12 @@ std::string ResizeOp::GeneratePythonCode(const std::string& inVar, const std::st
     if (interpIdx == 0) interpStr = "cv2.INTER_NEAREST";
     else if (interpIdx == 2) interpStr = "cv2.INTER_CUBIC";
     else if (interpIdx == 3) interpStr = "cv2.INTER_AREA";
-    else if (interpIdx == 4) interpStr = "cv2.INTER_LANCZOS4";
 
     std::stringstream ss;
-    ss << outVar << " = cv2.resize(" << inVar << ", None, fx=" << scale << ", fy=" << scale << ", interpolation=" << interpStr << ")";
+    ss << "# 几何图像缩放参数配置\n"
+       << "scale_factor = " << scale << "             # 缩放比例因子\n"
+       << "interpolation = " << interpStr << "\n"
+       << outVar << " = cv2.resize(" << inVar << ", None, fx=scale_factor, fy=scale_factor, interpolation=interpolation)";
     return ss.str();
 }
 
@@ -106,9 +100,8 @@ RotateOp::RotateOp()
     OpParameter angleParam;
     angleParam.Name = "angle";
     angleParam.DisplayName = "旋转角度 (Angle °)";
-    angleParam.Tooltip = "逆时针旋转角度 (-180° ~ 180°)";
     angleParam.Type = ParamType::DoubleSlider;
-    angleParam.Value = 45.0;
+    angleParam.Value = 0.0;
     angleParam.MinValue = -180.0;
     angleParam.MaxValue = 180.0;
     angleParam.Step = 1.0;
@@ -116,40 +109,40 @@ RotateOp::RotateOp()
 
     OpParameter scaleParam;
     scaleParam.Name = "scale";
-    scaleParam.DisplayName = "缩放系数 (Scale)";
-    scaleParam.Tooltip = "旋转同时的缩放倍数";
+    scaleParam.DisplayName = "缩放比例 (Scale)";
     scaleParam.Type = ParamType::DoubleSlider;
     scaleParam.Value = 1.0;
     scaleParam.MinValue = 0.1;
-    scaleParam.MaxValue = 2.0;
+    scaleParam.MaxValue = 3.0;
     scaleParam.Step = 0.05;
     _params.push_back(scaleParam);
 }
 
 std::string RotateOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：仿射旋转 (getRotationMatrix2D & warpAffine)\n\n"
-           "以图像中心点 $(c_x, c_y)$ 为锚点构建仿射变换矩阵：\n"
-           "$$M = \\begin{bmatrix} \\alpha & \\beta & (1-\\alpha)c_x - \\beta c_y \\\\ -\\beta & \\alpha & \\beta c_x + (1-\\alpha)c_y \\end{bmatrix}$$\n"
-           "其中 $\\alpha = \\text{scale} \\cdot \\cos(\\theta), \\beta = \\text{scale} \\cdot \\sin(\\theta)$。";
+    return "### 📘 算子原理：中心仿射旋转 (getRotationMatrix2D + warpAffine)\n\n"
+           "以图像中心点为原点，构建二维仿射变换矩阵：\n"
+           "$$\\begin{bmatrix} \\alpha & \\beta & (1-\\alpha)\\cdot cx - \\beta\\cdot cy \\\\ -\\beta & \\alpha & \\beta\\cdot cx + (1-\\alpha)\\cdot cy \\end{bmatrix}$$\n"
+           "其中 $\\alpha = scale \\cdot \\cos(\\theta), \\beta = scale \\cdot \\sin(\\theta)$。";
 }
 
 bool RotateOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
     double angle = _params[0].GetDouble();
     double scale = _params[1].GetDouble();
-    cv::Point2f center(input.cols / 2.0f, input.rows / 2.0f);
+
+    if (std::abs(angle) < 1e-4 && std::abs(scale - 1.0) < 1e-4)
+    {
+        output = input.clone();
+        return true;
+    }
 
     try
     {
+        cv::Point2f center(input.cols / 2.0f, input.rows / 2.0f);
         cv::Mat rotMat = cv::getRotationMatrix2D(center, angle, scale);
-        cv::warpAffine(input, output, rotMat, input.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
+        cv::warpAffine(input, output, rotMat, input.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar());
         return true;
     }
     catch (const cv::Exception& e)
@@ -165,9 +158,12 @@ std::string RotateOp::GenerateCppCode(const std::string& inVar, const std::strin
     double scale = _params[1].GetDouble();
 
     std::stringstream ss;
-    ss << "cv::Point2f center_" << outVar << "(" << inVar << ".cols / 2.0f, " << inVar << ".rows / 2.0f);\n"
-       << "cv::Mat rotMat_" << outVar << " = cv::getRotationMatrix2D(center_" << outVar << ", " << angle << ", " << scale << ");\n"
-       << "cv::warpAffine(" << inVar << ", " << outVar << ", rotMat_" << outVar << ", " << inVar << ".size());";
+    ss << "// 图像中心仿射旋转参数配置\n"
+       << "double rotAngle = " << angle << ";          // 旋转角度 (度)\n"
+       << "double rotScale = " << scale << ";          // 同步缩放因子\n"
+       << "cv::Point2f center(" << inVar << ".cols / 2.0f, " << inVar << ".rows / 2.0f);\n"
+       << "cv::Mat rotMat = cv::getRotationMatrix2D(center, rotAngle, rotScale);\n"
+       << "cv::warpAffine(" << inVar << ", " << outVar << ", rotMat, " << inVar << ".size());";
     return ss.str();
 }
 
@@ -177,9 +173,12 @@ std::string RotateOp::GeneratePythonCode(const std::string& inVar, const std::st
     double scale = _params[1].GetDouble();
 
     std::stringstream ss;
-    ss << "h, w = " << inVar << ".shape[:2]\n"
+    ss << "# 图像中心仿射旋转参数配置\n"
+       << "rot_angle = " << angle << "               # 旋转角度 (度)\n"
+       << "rot_scale = " << scale << "               # 同步缩放因子\n"
+       << "h, w = " << inVar << ".shape[:2]\n"
        << "center = (w / 2.0, h / 2.0)\n"
-       << "rot_mat = cv2.getRotationMatrix2D(center, " << angle << ", " << scale << ")\n"
+       << "rot_mat = cv2.getRotationMatrix2D(center, rot_angle, rot_scale)\n"
        << outVar << " = cv2.warpAffine(" << inVar << ", rot_mat, (w, h))";
     return ss.str();
 }
@@ -188,36 +187,31 @@ std::string RotateOp::GeneratePythonCode(const std::string& inVar, const std::st
 FlipOp::FlipOp()
 {
     OpParameter modeParam;
-    modeParam.Name = "flipCode";
-    modeParam.DisplayName = "翻转模式 (FlipCode)";
-    modeParam.Tooltip = "镜像翻转轴线选择";
+    modeParam.Name = "mode";
+    modeParam.DisplayName = "翻转模式 (Mode)";
     modeParam.Type = ParamType::ComboBox;
-    modeParam.Value = 1; // 水平
-    modeParam.EnumOptions = { "垂直翻转 (沿 X 轴翻转，FlipCode=0)", "水平翻转 (沿 Y 轴翻转，FlipCode=1)", "对角双向翻转 (沿 XY 双轴，FlipCode=-1)" };
+    modeParam.Value = 0;
+    modeParam.EnumOptions = {
+        "水平镜像 (Horizontal Flip)",
+        "垂直镜像 (Vertical Flip)",
+        "水平与垂直双向镜像 (Both Flip)"
+    };
     _params.push_back(modeParam);
 }
 
 std::string FlipOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：图像镜像 (flip)\n\n"
-           "围绕垂直轴、水平轴或同时围绕两者进行像素坐标倒置映射：\n"
-           "* **flipCode = 1**：水平镜像（左变为右，常用于相机镜像修正）；\n"
-           "* **flipCode = 0**：垂直镜像（上变为下）；\n"
-           "* **flipCode = -1**：水平+垂直对角翻转（等同于 180° 旋转）。";
+    return "### 📘 算子原理：图像镜像翻转 (flip)\n\n"
+           "* **flipCode = 1**：水平翻转（左右镜像，沿 Y 轴对称）\n"
+           "* **flipCode = 0**：垂直翻转（上下镜像，沿 X 轴对称）\n"
+           "* **flipCode = -1**：双向翻转（原点中心对称）";
 }
 
 bool FlipOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
-
-    int modeIdx = _params[0].GetInt();
-    int flipCode = 1;
-    if (modeIdx == 0) flipCode = 0;
-    else if (modeIdx == 2) flipCode = -1;
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    int mode = _params[0].GetInt();
+    int flipCode = (mode == 0) ? 1 : (mode == 1 ? 0 : -1);
 
     try
     {
@@ -233,25 +227,25 @@ bool FlipOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMs
 
 std::string FlipOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    int modeIdx = _params[0].GetInt();
-    int flipCode = 1;
-    if (modeIdx == 0) flipCode = 0;
-    else if (modeIdx == 2) flipCode = -1;
+    int mode = _params[0].GetInt();
+    std::string desc = (mode == 0) ? "1; // 1: 水平镜像 (沿Y轴)" : (mode == 1 ? "0; // 0: 垂直镜像 (沿X轴)" : "-1; // -1: 双向镜像 (中心对称)");
 
     std::stringstream ss;
-    ss << "cv::flip(" << inVar << ", " << outVar << ", " << flipCode << ");";
+    ss << "// 图像翻转镜像参数配置\n"
+       << "int flipCode = " << desc << "\n"
+       << "cv::flip(" << inVar << ", " << outVar << ", flipCode);";
     return ss.str();
 }
 
 std::string FlipOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    int modeIdx = _params[0].GetInt();
-    int flipCode = 1;
-    if (modeIdx == 0) flipCode = 0;
-    else if (modeIdx == 2) flipCode = -1;
+    int mode = _params[0].GetInt();
+    std::string desc = (mode == 0) ? "1 # 1: 水平镜像" : (mode == 1 ? "0 # 0: 垂直镜像" : "-1 # -1: 双向镜像");
 
     std::stringstream ss;
-    ss << outVar << " = cv2.flip(" << inVar << ", " << flipCode << ")";
+    ss << "# 图像翻转镜像参数配置\n"
+       << "flip_code = " << desc << "\n"
+       << outVar << " = cv2.flip(" << inVar << ", flip_code)";
     return ss.str();
 }
 
@@ -259,9 +253,8 @@ std::string FlipOp::GeneratePythonCode(const std::string& inVar, const std::stri
 CropRoiOp::CropRoiOp()
 {
     OpParameter xParam;
-    xParam.Name = "x_pct";
-    xParam.DisplayName = "起始 X 比例 (%)";
-    xParam.Tooltip = "左上角 X 占图像宽度的百分比";
+    xParam.Name = "xRatio";
+    xParam.DisplayName = "左边界比例 (X Ratio %)";
     xParam.Type = ParamType::IntSlider;
     xParam.Value = 10;
     xParam.MinValue = 0;
@@ -270,9 +263,8 @@ CropRoiOp::CropRoiOp()
     _params.push_back(xParam);
 
     OpParameter yParam;
-    yParam.Name = "y_pct";
-    yParam.DisplayName = "起始 Y 比例 (%)";
-    yParam.Tooltip = "左上角 Y 占图像高度的百分比";
+    yParam.Name = "yRatio";
+    yParam.DisplayName = "上边界比例 (Y Ratio %)";
     yParam.Type = ParamType::IntSlider;
     yParam.Value = 10;
     yParam.MinValue = 0;
@@ -281,23 +273,21 @@ CropRoiOp::CropRoiOp()
     _params.push_back(yParam);
 
     OpParameter wParam;
-    wParam.Name = "w_pct";
-    wParam.DisplayName = "宽度比例 (%)";
-    wParam.Tooltip = "ROI 宽度百分比";
+    wParam.Name = "wRatio";
+    wParam.DisplayName = "裁剪宽度比例 (Width Ratio %)";
     wParam.Type = ParamType::IntSlider;
     wParam.Value = 80;
-    wParam.MinValue = 5;
+    wParam.MinValue = 10;
     wParam.MaxValue = 100;
     wParam.Step = 1;
     _params.push_back(wParam);
 
     OpParameter hParam;
-    hParam.Name = "h_pct";
-    hParam.DisplayName = "高度比例 (%)";
-    hParam.Tooltip = "ROI 高度百分比";
+    hParam.Name = "hRatio";
+    hParam.DisplayName = "裁剪高度比例 (Height Ratio %)";
     hParam.Type = ParamType::IntSlider;
     hParam.Value = 80;
-    hParam.MinValue = 5;
+    hParam.MinValue = 10;
     hParam.MaxValue = 100;
     hParam.Step = 1;
     _params.push_back(hParam);
@@ -305,28 +295,29 @@ CropRoiOp::CropRoiOp()
 
 std::string CropRoiOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：ROI 感兴趣区域裁剪 (Crop / ROI)\n\n"
-           "通过矩阵切片 `image(Rect(x, y, width, height))` 提取特定矩形区域，锁定核心检测视野并大幅降低后续算法的计算耗时。";
+    return "### 📘 算子原理：ROI 感兴趣区域裁剪 (ROI Crop)\n\n"
+           "通过矩形选框提取关键目标区域，剔除无关背景干扰，减少后续算法计算量。";
 }
 
 bool CropRoiOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty())
-    {
-        errorMsg = "输入图像为空";
-        return false;
-    }
+    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    int xR = _params[0].GetInt();
+    int yR = _params[1].GetInt();
+    int wR = _params[2].GetInt();
+    int hR = _params[3].GetInt();
 
-    int x = (_params[0].GetInt() * input.cols) / 100;
-    int y = (_params[1].GetInt() * input.rows) / 100;
-    int w = (_params[2].GetInt() * input.cols) / 100;
-    int h = (_params[3].GetInt() * input.rows) / 100;
+    int x = (input.cols * xR) / 100;
+    int y = (input.rows * yR) / 100;
+    int w = (input.cols * wR) / 100;
+    int h = (input.rows * hR) / 100;
 
-    if (x + w > input.cols) { w = input.cols - x; }
-    if (y + h > input.rows) { h = input.rows - y; }
+    if (x + w > input.cols) w = input.cols - x;
+    if (y + h > input.rows) h = input.rows - y;
+
     if (w <= 0 || h <= 0)
     {
-        errorMsg = "裁剪区域长宽非法";
+        errorMsg = "裁剪区域长宽无效";
         return false;
     }
 
@@ -345,30 +336,36 @@ bool CropRoiOp::Process(const cv::Mat& input, cv::Mat& output, std::string& erro
 
 std::string CropRoiOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    int xPct = _params[0].GetInt(), yPct = _params[1].GetInt();
-    int wPct = _params[2].GetInt(), hPct = _params[3].GetInt();
+    int xR = _params[0].GetInt();
+    int yR = _params[1].GetInt();
+    int wR = _params[2].GetInt();
+    int hR = _params[3].GetInt();
 
     std::stringstream ss;
-    ss << "int x_" << outVar << " = (" << inVar << ".cols * " << xPct << ") / 100;\n"
-       << "int y_" << outVar << " = (" << inVar << ".rows * " << yPct << ") / 100;\n"
-       << "int w_" << outVar << " = (" << inVar << ".cols * " << wPct << ") / 100;\n"
-       << "int h_" << outVar << " = (" << inVar << ".rows * " << hPct << ") / 100;\n"
-       << "cv::Rect roi_" << outVar << "(x_" << outVar << ", y_" << outVar << ", w_" << outVar << ", h_" << outVar << ");\n"
-       << outVar << " = " << inVar << "(roi_" << outVar << ").clone();";
+    ss << "// ROI区域裁剪参数配置 (基于图像比例百分比计算)\n"
+       << "int cropX = (" << inVar << ".cols * " << xR << ") / 100;      // 起始X坐标 (" << xR << "%)\n"
+       << "int cropY = (" << inVar << ".rows * " << yR << ") / 100;      // 起始Y坐标 (" << yR << "%)\n"
+       << "int cropW = (" << inVar << ".cols * " << wR << ") / 100;      // 宽度 (" << wR << "%)\n"
+       << "int cropH = (" << inVar << ".rows * " << hR << ") / 100;      // 高度 (" << hR << "%)\n"
+       << "cv::Rect roi(cropX, cropY, cropW, cropH);\n"
+       << outVar << " = " << inVar << "(roi).clone();";
     return ss.str();
 }
 
 std::string CropRoiOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    int xPct = _params[0].GetInt(), yPct = _params[1].GetInt();
-    int wPct = _params[2].GetInt(), hPct = _params[3].GetInt();
+    int xR = _params[0].GetInt();
+    int yR = _params[1].GetInt();
+    int wR = _params[2].GetInt();
+    int hR = _params[3].GetInt();
 
     std::stringstream ss;
-    ss << "h, w = " << inVar << ".shape[:2]\n"
-       << "x = int(w * " << xPct / 100.0 << ")\n"
-       << "y = int(h * " << yPct / 100.0 << ")\n"
-       << "roi_w = int(w * " << wPct / 100.0 << ")\n"
-       << "roi_h = int(h * " << hPct / 100.0 << ")\n"
-       << outVar << " = " << inVar << "[y:y+roi_h, x:x+roi_w].copy()";
+    ss << "# ROI区域裁剪参数配置\n"
+       << "h_orig, w_orig = " << inVar << ".shape[:2]\n"
+       << "crop_x = int((w_orig * " << xR << ") / 100)       # 起始X (" << xR << "%)\n"
+       << "crop_y = int((h_orig * " << yR << ") / 100)       # 起始Y (" << yR << "%)\n"
+       << "crop_w = int((w_orig * " << wR << ") / 100)       # 宽度 (" << wR << "%)\n"
+       << "crop_h = int((h_orig * " << hR << ") / 100)       # 高度 (" << hR << "%)\n"
+       << outVar << " = " << inVar << "[crop_y:crop_y+crop_h, crop_x:crop_x+crop_w].copy()";
     return ss.str();
 }

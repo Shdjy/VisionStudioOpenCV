@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QHBoxLayout>
+#include <QEvent>
 
 PropertyPanel::PropertyPanel(QWidget* parent)
     : QWidget(parent)
@@ -18,6 +19,17 @@ PropertyPanel::PropertyPanel(QWidget* parent)
 PropertyPanel::~PropertyPanel()
 {
     delete ui;
+}
+
+bool PropertyPanel::eventFilter(QObject* watched, QEvent* event)
+{
+    // 拦截参数调节控件上的滚轮事件，防止误触，使滚轮专用于滚动整个页面
+    if (event->type() == QEvent::Wheel)
+    {
+        event->ignore();
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void PropertyPanel::SetPipelineManager(PipelineManager* pipelineMgr)
@@ -102,6 +114,12 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
             auto* slider = new QSlider(Qt::Horizontal, rowWidget);
             auto* spinBox = new QSpinBox(rowWidget);
 
+            // 安装滚轮事件过滤器并设置焦点策略
+            slider->installEventFilter(this);
+            spinBox->installEventFilter(this);
+            slider->setFocusPolicy(Qt::NoFocus);
+            spinBox->setFocusPolicy(Qt::ClickFocus);
+
             int minVal = std::holds_alternative<int>(param.MinValue) ? std::get<int>(param.MinValue) : 0;
             int maxVal = std::holds_alternative<int>(param.MaxValue) ? std::get<int>(param.MaxValue) : 100;
             int step = std::holds_alternative<int>(param.Step) ? std::get<int>(param.Step) : 1;
@@ -141,6 +159,12 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
             auto* ctrlLayout = new QHBoxLayout();
             auto* slider = new QSlider(Qt::Horizontal, rowWidget);
             auto* spinBox = new QDoubleSpinBox(rowWidget);
+
+            // 安装滚轮事件过滤器并设置焦点策略
+            slider->installEventFilter(this);
+            spinBox->installEventFilter(this);
+            slider->setFocusPolicy(Qt::NoFocus);
+            spinBox->setFocusPolicy(Qt::ClickFocus);
 
             double minVal = param.MinValue.index() == 0 ? std::get<int>(param.MinValue) : std::get<double>(param.MinValue);
             double maxVal = param.MaxValue.index() == 0 ? std::get<int>(param.MaxValue) : std::get<double>(param.MaxValue);
@@ -187,6 +211,9 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
         else if (param.Type == ParamType::ComboBox)
         {
             auto* combo = new QComboBox(rowWidget);
+            combo->installEventFilter(this);
+            combo->setFocusPolicy(Qt::StrongFocus);
+
             for (const auto& opt : param.EnumOptions)
             {
                 combo->addItem(QString::fromStdString(opt));

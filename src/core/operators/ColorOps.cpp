@@ -90,15 +90,18 @@ std::string CvtColorOp::GenerateCppCode(const std::string& inVar, const std::str
 {
     int mode = _params[0].GetInt();
     std::string codeConst = "cv::COLOR_BGR2GRAY";
-    if (mode == 1) codeConst = "cv::COLOR_GRAY2BGR";
-    else if (mode == 2) codeConst = "cv::COLOR_BGR2HSV";
-    else if (mode == 3) codeConst = "cv::COLOR_HSV2BGR";
-    else if (mode == 4) codeConst = "cv::COLOR_BGR2RGB";
-    else if (mode == 5) codeConst = "cv::COLOR_BGR2Lab";
-    else if (mode == 6) codeConst = "cv::COLOR_BGR2YCrCb";
+    std::string desc = "BGR -> GRAY (灰度化)";
+    if (mode == 1) { codeConst = "cv::COLOR_GRAY2BGR"; desc = "GRAY -> BGR (灰度转伪BGR)"; }
+    else if (mode == 2) { codeConst = "cv::COLOR_BGR2HSV"; desc = "BGR -> HSV (色调/饱和度/明度)"; }
+    else if (mode == 3) { codeConst = "cv::COLOR_HSV2BGR"; desc = "HSV -> BGR"; }
+    else if (mode == 4) { codeConst = "cv::COLOR_BGR2RGB"; desc = "BGR -> RGB (反序)"; }
+    else if (mode == 5) { codeConst = "cv::COLOR_BGR2Lab"; desc = "BGR -> Lab (均匀色彩空间)"; }
+    else if (mode == 6) { codeConst = "cv::COLOR_BGR2YCrCb"; desc = "BGR -> YCrCb"; }
 
     std::stringstream ss;
-    ss << "cv::cvtColor(" << inVar << ", " << outVar << ", " << codeConst << ");";
+    ss << "// 色彩转换参数: " << desc << "\n"
+       << "int colorCode = " << codeConst << ";\n"
+       << "cv::cvtColor(" << inVar << ", " << outVar << ", colorCode);";
     return ss.str();
 }
 
@@ -106,15 +109,18 @@ std::string CvtColorOp::GeneratePythonCode(const std::string& inVar, const std::
 {
     int mode = _params[0].GetInt();
     std::string codeConst = "cv2.COLOR_BGR2GRAY";
-    if (mode == 1) codeConst = "cv2.COLOR_GRAY2BGR";
-    else if (mode == 2) codeConst = "cv2.COLOR_BGR2HSV";
-    else if (mode == 3) codeConst = "cv2.COLOR_HSV2BGR";
-    else if (mode == 4) codeConst = "cv2.COLOR_BGR2RGB";
-    else if (mode == 5) codeConst = "cv2.COLOR_BGR2Lab";
-    else if (mode == 6) codeConst = "cv2.COLOR_BGR2YCrCb";
+    std::string desc = "BGR -> GRAY (灰度化)";
+    if (mode == 1) { codeConst = "cv2.COLOR_GRAY2BGR"; desc = "GRAY -> BGR"; }
+    else if (mode == 2) { codeConst = "cv2.COLOR_BGR2HSV"; desc = "BGR -> HSV"; }
+    else if (mode == 3) { codeConst = "cv2.COLOR_HSV2BGR"; desc = "HSV -> BGR"; }
+    else if (mode == 4) { codeConst = "cv2.COLOR_BGR2RGB"; desc = "BGR -> RGB"; }
+    else if (mode == 5) { codeConst = "cv2.COLOR_BGR2Lab"; desc = "BGR -> Lab"; }
+    else if (mode == 6) { codeConst = "cv2.COLOR_BGR2YCrCb"; desc = "BGR -> YCrCb"; }
 
     std::stringstream ss;
-    ss << outVar << " = cv2.cvtColor(" << inVar << ", " << codeConst << ")";
+    ss << "# 色彩转换参数: " << desc << "\n"
+       << "color_code = " << codeConst << "\n"
+       << outVar << " = cv2.cvtColor(" << inVar << ", color_code)";
     return ss.str();
 }
 
@@ -174,9 +180,11 @@ std::string ChannelSplitOp::GenerateCppCode(const std::string& inVar, const std:
 {
     int chIdx = _params[0].GetInt();
     std::stringstream ss;
-    ss << "std::vector<cv::Mat> channels_" << outVar << ";\n"
+    ss << "// 通道分离参数配置\n"
+       << "int targetChannel = " << chIdx << "; // 提取第 " << chIdx << " 通道\n"
+       << "std::vector<cv::Mat> channels_" << outVar << ";\n"
        << "cv::split(" << inVar << ", channels_" << outVar << ");\n"
-       << outVar << " = channels_" << outVar << "[" << chIdx << "];";
+       << outVar << " = channels_" << outVar << "[targetChannel];";
     return ss.str();
 }
 
@@ -184,7 +192,9 @@ std::string ChannelSplitOp::GeneratePythonCode(const std::string& inVar, const s
 {
     int chIdx = _params[0].GetInt();
     std::stringstream ss;
-    ss << "channels_" << outVar << " = cv2.split(" << inVar << ")\n"
-       << outVar << " = channels_" << outVar << "[" << chIdx << "]";
+    ss << "# 通道分离参数配置\n"
+       << "target_channel = " << chIdx << " # 提取第 " << chIdx << " 通道\n"
+       << "channels_" << outVar << " = cv2.split(" << inVar << ")\n"
+       << outVar << " = channels_" << outVar << "[target_channel]";
     return ss.str();
 }

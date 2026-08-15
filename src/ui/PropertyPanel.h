@@ -23,6 +23,9 @@ public slots:
 signals:
     void ParameterChanged(int stepIndex);
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     Ui::PropertyPanel* ui;
     PipelineManager* _pipelineMgr = nullptr;
