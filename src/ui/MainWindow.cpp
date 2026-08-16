@@ -1,3 +1,6 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 #include "AboutDialog.h"

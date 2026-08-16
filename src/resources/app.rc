@@ -1,3 +1,5 @@
 #include <windows.h>
 
+// Windows 资源管理器默认识别 ID 最小的主程序图标
+1 ICON "icons/app_icon.ico"
 IDI_ICON1 ICON "icons/app_icon.ico"

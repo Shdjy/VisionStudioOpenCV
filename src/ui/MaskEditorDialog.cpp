@@ -1,6 +1,10 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "MaskEditorDialog.h"
 #include "ui_MaskEditorDialog.h"
 #include "../utils/MatUtils.h"
+#include <algorithm>
 #include <QMouseEvent>
 #include <QIcon>
 

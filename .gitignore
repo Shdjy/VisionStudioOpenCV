@@ -1,8 +1,25 @@
+# CMake 构建输出目录
 build/
 build_*/
-*.user
-*.orig
-.vscode/
-.idea/
 bin/
 lib/
+out/
+
+# Qt Creator 用户专属配置
+*.user
+*.user.*
+CMakeLists.txt.user
+
+# Visual Studio 用户专属配置
+.vs/
+*.vcxproj.user
+*.suo
+
+# 临时与缓存文件
+*.o
+*.obj
+*.res
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
