@@ -57,7 +57,7 @@ private:
 };
 
 /**
- * @brief 模板匹配算子 (matchTemplate)
+ * @brief 模板匹配与目标定位算子 (matchTemplate)
  */
 class MatchTemplateOp : public IOpNode
 {
@@ -67,8 +67,8 @@ public:
 
     OpCategory GetCategory() const override { return OpCategory::FeatureAndMatch; }
     std::string GetName() const override { return "MatchTemplate"; }
-    std::string GetDisplayName() const override { return "模板匹配 (MatchTemplate)"; }
-    std::string GetDescription() const override { return "在输入图像中滑动对比搜索自选 ROI 区域的目标并定位置信度最高位置。"; }
+    std::string GetDisplayName() const override { return "模板匹配与定位 (Match Template)"; }
+    std::string GetDescription() const override { return "在图像中通过滑窗搜索指定 ROI 模板，支持单目标/多目标匹配、阈值过滤与亚像素高亮标定。"; }
     std::string GetPrincipleDoc() const override;
 
     bool Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg) override;
@@ -78,6 +78,8 @@ public:
     std::string GenerateCppCode(const std::string& inVar, const std::string& outVar) const override;
     std::string GeneratePythonCode(const std::string& inVar, const std::string& outVar) const override;
     std::unique_ptr<IOpNode> Clone() const override { return std::make_unique<MatchTemplateOp>(*this); }
+
+    void SetTemplateRoi(int x, int y, int w, int h);
 
 private:
     std::vector<OpParameter> _params;
