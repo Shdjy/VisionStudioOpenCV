@@ -24,18 +24,19 @@ message(STATUS "Found Qt Version: ${QT_VERSION} (Qt${QT_VERSION_MAJOR})")
 # ----------------------------------------------------------------------------
 # 2. 查找 OpenCV (多 IDE 智能自动探测)
 # ----------------------------------------------------------------------------
-list(APPEND CMAKE_PREFIX_PATH
-    "D:/Qt/6.8.2/mingw_64"
-    "D:/opencv4.9/build_mingw"
-    "D:/opencv4.9/opencv/build/x64/vc16/lib"
-    "D:/opencv4.9/opencv/build/x64/vc15/lib"
-    "D:/opencv4.9/opencv/build"
-    "D:/opencv4.9/opencv"
-    "D:/OpenCV3.4.1/build_vs2017_NoCuda_Win64/install"
-    "D:/OpenCV3.4.1/build"
-    "D:/C++library/opencv/build"
-    "C:/opencv/build"
-)
+if(MINGW)
+    list(APPEND CMAKE_PREFIX_PATH
+        "D:/Qt/6.8.2/mingw_64"
+        "D:/Qt/5.14.2/mingw73_64"
+        "D:/opencv4.9/build_mingw"
+    )
+else()
+    list(APPEND CMAKE_PREFIX_PATH
+        "D:/Qt/6.8.2/msvc2019_64"
+        "D:/Qt/5.14.2/msvc2017_64"
+        "D:/opencv4.9/opencv/build"
+    )
+endif()
 
 find_package(OpenCV QUIET)
 
