@@ -10,6 +10,7 @@
 #include "operators/HoughOps.h"
 #include "operators/FeatureOps.h"
 #include "operators/ArithmeticOps.h"
+#include "operators/InteractiveMaskOp.h"
 #include <algorithm>
 
 std::unique_ptr<IOpNode> OpRegistry::Create(const std::string& name) const
@@ -96,6 +97,7 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<InRangeOp>();
     Register<ThresholdTruncateOp>();
     Register<MaskApplyOp>();
+    Register<InteractiveMaskOp>();
 
     // 4. 形态学
     Register<DilateOp>();

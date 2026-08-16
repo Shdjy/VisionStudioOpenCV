@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 #include "AboutDialog.h"
+#include "MaskEditorDialog.h"
 #include "../core/OpRegistry.h"
 #include "../bll/ProjectManager.h"
 #include "../utils/Logger.h"
@@ -157,7 +158,16 @@ void MainWindow::InitUiAndDocks()
     ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_DesktopIcon));
     ui->actionAbout->setIcon(QIcon(":/icons/app_icon.png")); // 专属应用 Logo
 
-    // 11. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标 (带明确选中状态指示)
+    // 11. 在工具栏增加 🎭 创建交互式掩码 快捷按钮
+    ui->mainToolBar->addSeparator();
+    auto* actionCreateMask = new QAction(style()->standardIcon(QStyle::SP_FileDialogListView), "创建/编辑交互式掩码", this);
+    actionCreateMask->setToolTip("一键可视化绘制或生成局部掩码 (Alt+M)");
+    actionCreateMask->setStatusTip("弹出工作台鼠标拖动选区或根据阈值自动生成局部掩码");
+    actionCreateMask->setShortcut(QKeySequence("Alt+M"));
+    connect(actionCreateMask, &QAction::triggered, this, &MainWindow::OnCreateMaskDialog);
+    ui->mainToolBar->addAction(actionCreateMask);
+
+    // 12. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标 (带明确选中状态指示)
     ui->mainToolBar->addSeparator();
 
     auto* actionToggleCode = new QAction(style()->standardIcon(QStyle::SP_FileDialogContentsView), "代码生成面板", this);
@@ -180,16 +190,17 @@ void MainWindow::InitUiAndDocks()
     connect(_dockLog, &QDockWidget::visibilityChanged, actionToggleLog, &QAction::setChecked);
     ui->mainToolBar->addAction(actionToggleLog);
 
-    // 12. 视图菜单补充 Dock 控制
+    // 13. 视图菜单补充 Dock 控制
     ui->menuView->addAction(_dockOperators->toggleViewAction());
     ui->menuView->addAction(_dockPipeline->toggleViewAction());
     ui->menuView->addAction(_dockProperties->toggleViewAction());
     ui->menuView->addAction(_dockHistogram->toggleViewAction());
     ui->menuView->addSeparator();
+    ui->menuView->addAction(actionCreateMask);
     ui->menuView->addAction(actionToggleCode);
     ui->menuView->addAction(actionToggleLog);
 
-    // 13. 状态栏
+    // 14. 状态栏
     _lblStatusInfo = new QLabel("就绪", this);
     _lblPipelineTime = new QLabel("流水线耗时: 0.0 ms", this);
     _lblImageDim = new QLabel("图像: 未加载", this);
@@ -197,6 +208,32 @@ void MainWindow::InitUiAndDocks()
     ui->statusBar->addWidget(_lblStatusInfo, 1);
     ui->statusBar->addPermanentWidget(_lblPipelineTime);
     ui->statusBar->addPermanentWidget(_lblImageDim);
+}
+
+void MainWindow::OnCreateMaskDialog()
+{
+    const cv::Mat& currentMat = _imageViewer->GetCurrentImage();
+    const cv::Mat& sourceMat = _pipelineManager.GetSourceImage();
+    if (currentMat.empty() && sourceMat.empty())
+    {
+        QMessageBox::warning(this, "提示", "请先加载或打开图像后再创建掩码！");
+        return;
+    }
+
+    MaskEditorDialog dlg(currentMat.empty() ? sourceMat : currentMat, sourceMat, this);
+    if (dlg.exec() == QDialog::Accepted)
+    {
+        auto op = dlg.GetConfiguredOperator();
+        if (op)
+        {
+            std::string dispName = op->GetDisplayName();
+            int stepIdx = _pipelineManager.AddStep(std::move(op));
+            _pipelineManager.Execute();
+            _pipelineList->SelectStep(stepIdx);
+            _propertyPanel->SetCurrentStep(stepIdx);
+            Logger::Info("MainWindow", "已通过交互式掩码编辑器添加: " + dispName);
+        }
+    }
 }
 
 void MainWindow::OnToggleCodeDock()

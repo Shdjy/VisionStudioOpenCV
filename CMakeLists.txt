@@ -83,6 +83,7 @@ set(CORE_SOURCES
     src/core/operators/HoughOps.cpp
     src/core/operators/FeatureOps.cpp
     src/core/operators/ArithmeticOps.cpp
+    src/core/operators/InteractiveMaskOp.cpp
 )
 
 set(BLL_SOURCES
@@ -111,6 +112,7 @@ set(UI_SOURCES
     src/ui/LogPanelWidget.cpp
     src/ui/HistogramWidget.cpp
     src/ui/AboutDialog.cpp
+    src/ui/MaskEditorDialog.cpp
 )
 
 set(UI_FORMS
@@ -123,6 +125,7 @@ set(UI_FORMS
     src/ui/LogPanelWidget.ui
     src/ui/HistogramWidget.ui
     src/ui/AboutDialog.ui
+    src/ui/MaskEditorDialog.ui
 )
 
 set(RESOURCES

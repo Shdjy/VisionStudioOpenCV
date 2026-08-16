@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MaskEditorDialog</class>
+ <widget class="QDialog" name="MaskEditorDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>960</width>
+    <height>640</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>🎭 交互式掩码创建与局部ROI编辑器 (Interactive Mask Workbench)</string>
+  </property>
+  <layout class="QHBoxLayout" name="mainLayout">
+   <property name="leftMargin">
+    <number>8</number>
+   </property>
+   <property name="topMargin">
+    <number>8</number>
+   </property>
+   <property name="rightMargin">
+    <number>8</number>
+   </property>
+   <property name="bottomMargin">
+    <number>8</number>
+   </property>
+   <item>
+    <layout class="QVBoxLayout" name="viewLayout">
+     <item>
+      <widget class="QLabel" name="lblInstructions">
+       <property name="styleSheet">
+        <string notr="true">background-color: #2d2d30; color: #5dade2; padding: 6px; font-weight: bold; border-radius: 3px;</string>
+       </property>
+       <property name="text">
+        <string>🖱️ 提示: 在下方图像中按住鼠标左键并拖动可直接调整 ROI 选区范围</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGraphicsView" name="graphicsView">
+       <property name="dragMode">
+        <enum>QGraphicsView::NoDrag</enum>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QFrame" name="sidePanel">
+     <property name="minimumSize">
+      <size>
+       <width>320</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>340</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <layout class="QVBoxLayout" name="sideLayout">
+      <item>
+       <widget class="QGroupBox" name="grpShape">
+        <property name="title">
+         <string>1. 掩码生成模式 (Mask Shape)</string>
+        </property>
+        <layout class="QVBoxLayout" name="shapeLayout">
+         <item>
+          <widget class="QComboBox" name="comboShape">
+           <item>
+            <property name="text">
+             <string>矩形选区 (Rectangle ROI)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>圆形/椭圆选区 (Circle ROI)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>原图亮度阈值自动掩码 (Threshold Auto)</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="lblThresh">
+           <property name="text">
+            <string>自动阈值分割门限: 128</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSlider" name="sliderThresh">
+           <property name="maximum">
+            <number>254</number>
+           </property>
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="value">
+            <number>128</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="grpTarget">
+        <property name="title">
+         <string>2. 作用目标图 (Target Image)</string>
+        </property>
+        <layout class="QVBoxLayout" name="targetLayout">
+         <item>
+          <widget class="QComboBox" name="comboTarget">
+           <item>
+            <property name="text">
+             <string>当前流水线输入图像 (Current Input)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>原始基准输入图像 (Original Source)</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="grpAction">
+        <property name="title">
+         <string>3. 掩码复合操作 (Mask Action)</string>
+        </property>
+        <layout class="QVBoxLayout" name="actionLayout">
+         <item>
+          <widget class="QComboBox" name="comboAction">
+           <item>
+            <property name="text">
+             <string>仅提取ROI区域 (纯黑背景)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>仅提取ROI区域 (纯白背景)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>反转剔除ROI区域 (挖空目标)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>掩码内局部高斯滤波 (Local Blur)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>掩码内局部USM锐化 (Local Sharpen)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>掩码内局部对比度增强 (Local Contrast)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>半透明红色高亮标注 (Highlight Mask)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>仅输出单通道二值掩码 (Binary Mask)</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="grpCoords">
+        <property name="title">
+         <string>4. 选区几何坐标 (Geometry ROI)</string>
+        </property>
+        <layout class="QGridLayout" name="coordsLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="lblX"><property name="text"><string>X:</string></property></widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QSpinBox" name="spinX"><property name="maximum"><number>5000</number></property></widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QLabel" name="lblY"><property name="text"><string>Y:</string></property></widget>
+         </item>
+         <item row="0" column="3">
+          <widget class="QSpinBox" name="spinY"><property name="maximum"><number>5000</number></property></widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="lblW"><property name="text"><string>W:</string></property></widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QSpinBox" name="spinW"><property name="maximum"><number>5000</number></property><property name="value"><number>200</number></property></widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QLabel" name="lblH"><property name="text"><string>H:</string></property></widget>
+         </item>
+         <item row="1" column="3">
+          <widget class="QSpinBox" name="spinH"><property name="maximum"><number>5000</number></property><property name="value"><number>150</number></property></widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <spacer name="vSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="btnLayout">
+        <item>
+         <widget class="QPushButton" name="btnCancel">
+          <property name="text">
+           <string>取消</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnApply">
+          <property name="text">
+           <string>💾 应用并加入流水线</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

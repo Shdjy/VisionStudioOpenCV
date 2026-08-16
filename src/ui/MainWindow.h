@@ -43,6 +43,7 @@ private slots:
     void OnOperatorAddRequested(const QString& opName);
     void OnStepSelected(int index);
     void OnPipelineExecutionCompleted(double totalTimeMs);
+    void OnCreateMaskDialog();
 
 private:
     Ui::MainWindow* ui;
