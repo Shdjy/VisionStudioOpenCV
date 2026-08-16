@@ -1,5 +1,6 @@
 #include "PipelineManager.h"
 #include "../utils/Logger.h"
+#include "../core/PipelineContext.h"
 #include <chrono>
 
 PipelineManager::PipelineManager(QObject* parent)
@@ -10,6 +11,7 @@ PipelineManager::PipelineManager(QObject* parent)
 void PipelineManager::SetSourceImage(const cv::Mat& img)
 {
     _sourceImage = img.clone();
+    PipelineContext::Instance().SetSourceImage(_sourceImage);
     MarkDirtyFrom(0);
     emit PipelineChanged();
 }
@@ -86,6 +88,7 @@ void PipelineManager::Clear()
 {
     _steps.clear();
     _totalTimeMs = 0.0;
+    PipelineContext::Instance().Clear();
     emit PipelineChanged();
 }
 
@@ -122,6 +125,8 @@ bool PipelineManager::Execute(bool forceAll)
         return false;
     }
 
+    PipelineContext::Instance().SetSourceImage(_sourceImage);
+
     if (forceAll)
     {
         MarkDirtyFrom(0);
@@ -135,7 +140,8 @@ bool PipelineManager::Execute(bool forceAll)
         PipelineStep* currentStep = _steps[i].get();
         if (!currentStep->IsDirty())
         {
-            // 已有缓存且未脏，直接跳过计算
+            // 已有缓存且未脏，直接更新上下文后跳过计算
+            PipelineContext::Instance().SetStepOutput(static_cast<int>(i), currentStep->GetOutputCache());
             continue;
         }
 
@@ -157,6 +163,7 @@ bool PipelineManager::Execute(bool forceAll)
             currentStep->SetExecutionTimeMs(0.0);
             currentStep->SetErrorMessage("");
             currentStep->ClearDirty();
+            PipelineContext::Instance().SetStepOutput(static_cast<int>(i), currentStep->GetOutputCache());
             continue;
         }
 
@@ -174,6 +181,7 @@ bool PipelineManager::Execute(bool forceAll)
             currentStep->SetOutputCache(output);
             currentStep->SetErrorMessage("");
             currentStep->ClearDirty();
+            PipelineContext::Instance().SetStepOutput(static_cast<int>(i), output);
             emit StepExecuted(static_cast<int>(i), elapsedMs);
         }
         else

@@ -82,6 +82,7 @@ set(CORE_SOURCES
     src/core/operators/ContourOps.cpp
     src/core/operators/HoughOps.cpp
     src/core/operators/FeatureOps.cpp
+    src/core/operators/ArithmeticOps.cpp
 )
 
 set(BLL_SOURCES

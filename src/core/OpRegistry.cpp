@@ -9,6 +9,7 @@
 #include "operators/ContourOps.h"
 #include "operators/HoughOps.h"
 #include "operators/FeatureOps.h"
+#include "operators/ArithmeticOps.h"
 #include <algorithm>
 
 std::unique_ptr<IOpNode> OpRegistry::Create(const std::string& name) const
@@ -93,6 +94,8 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<OtsuThresholdOp>();
     Register<AdaptiveThresholdOp>();
     Register<InRangeOp>();
+    Register<ThresholdTruncateOp>();
+    Register<MaskApplyOp>();
 
     // 4. 形态学
     Register<DilateOp>();
@@ -111,13 +114,14 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<FlipOp>();
     Register<CropRoiOp>();
 
-    // 7. 图像增强
+    // 7. 图像增强与多图运算
     Register<BrightnessContrastOp>();
     Register<EqualizeHistOp>();
     Register<CLAHEOp>();
     Register<GammaCorrectionOp>();
     Register<InvertOp>();
     Register<SharpenOp>();
+    Register<BlendWithSourceOp>();
 
     // 8. 轮廓分析
     Register<FindContoursOp>();
