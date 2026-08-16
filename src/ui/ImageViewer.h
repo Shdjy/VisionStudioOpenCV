@@ -11,6 +11,14 @@ namespace Ui {
 class ImageViewer;
 }
 
+enum class ViewCompareMode
+{
+    Single = 0,       // 单图模式
+    SplitSlider = 1,  // 卷帘滑动对比
+    SideBySide = 2,   // 左右并排对比
+    TopBottom = 3     // 上下并排对比
+};
+
 class ImageViewer : public QWidget
 {
     Q_OBJECT
@@ -20,12 +28,12 @@ public:
     ~ImageViewer() override;
 
     /**
-     * @brief 显示处理结果图像
+     * @brief 设置待展示的图像与原图
      */
     void SetImage(const cv::Mat& processedMat, const cv::Mat& originalMat = cv::Mat());
 
     /**
-     * @brief 获取当前显示的图像
+     * @brief 获取当前展示的核心图像
      */
     const cv::Mat& GetCurrentImage() const { return _currentProcessedMat; }
 
@@ -43,7 +51,7 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
-    void OnSplitViewToggled(bool checked);
+    void OnCompareModeChanged(int index);
     void OnSplitSliderChanged(int value);
 
 private:
@@ -55,7 +63,7 @@ private:
     cv::Mat _currentOriginalMat;
 
     double _scaleFactor = 1.0;
-    bool _isSplitView = false;
+    ViewCompareMode _compareMode = ViewCompareMode::Single;
     int _splitPercent = 50;
 
     void RenderDisplay();

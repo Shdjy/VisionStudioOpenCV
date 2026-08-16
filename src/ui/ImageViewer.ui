@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>750</width>
+    <width>850</width>
     <height>550</height>
    </rect>
   </property>
@@ -49,6 +49,9 @@
       </property>
       <item>
        <widget class="QToolButton" name="btnZoomIn">
+        <property name="toolTip">
+         <string>放大图像</string>
+        </property>
         <property name="text">
          <string>🔍+ 放大</string>
         </property>
@@ -56,6 +59,9 @@
       </item>
       <item>
        <widget class="QToolButton" name="btnZoomOut">
+        <property name="toolTip">
+         <string>缩小图像</string>
+        </property>
         <property name="text">
          <string>🔍- 缩小</string>
         </property>
@@ -63,6 +69,9 @@
       </item>
       <item>
        <widget class="QToolButton" name="btnZoomFit">
+        <property name="toolTip">
+         <string>自适应窗口大小</string>
+        </property>
         <property name="text">
          <string>↔ 自适应</string>
         </property>
@@ -70,6 +79,9 @@
       </item>
       <item>
        <widget class="QToolButton" name="btnZoomOriginal">
+        <property name="toolTip">
+         <string>1:1 原始像素大小</string>
+        </property>
         <property name="text">
          <string>1:1 原始</string>
         </property>
@@ -83,14 +95,44 @@
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="chkSplitView">
+       <widget class="QLabel" name="lblMode">
         <property name="text">
-         <string>分屏对比模式 (Split View)</string>
+         <string>对比模式:</string>
         </property>
        </widget>
       </item>
       <item>
+       <widget class="QComboBox" name="comboCompareMode">
+        <property name="toolTip">
+         <string>选择图像显示与原图对比模式</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>单图显示 (Single View)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>卷帘分屏对比 (Split Slider)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>左右并排对比 (Side-by-Side)</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>上下并排对比 (Top-Bottom)</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
        <widget class="QSlider" name="sliderSplitPos">
+        <property name="toolTip">
+         <string>调节卷帘对比分割线位置</string>
+        </property>
         <property name="maximum">
          <number>100</number>
         </property>

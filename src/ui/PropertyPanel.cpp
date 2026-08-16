@@ -1,5 +1,6 @@
 #include "PropertyPanel.h"
 #include "ui_PropertyPanel.h"
+#include "../core/OpRegistry.h"
 #include <QLabel>
 #include <QSlider>
 #include <QSpinBox>
@@ -39,7 +40,10 @@ void PropertyPanel::SetPipelineManager(PipelineManager* pipelineMgr)
 
 void PropertyPanel::SetCurrentStep(int stepIndex)
 {
+    _isPreviewMode = false;
+    _previewOpNode.reset();
     _currentStepIndex = stepIndex;
+
     if (!_pipelineMgr)
     {
         ClearDynamicWidgets();
@@ -54,7 +58,7 @@ void PropertyPanel::SetCurrentStep(int stepIndex)
     {
         ClearDynamicWidgets();
         ui->lblOpTitle->setText("未选中算子");
-        ui->lblOpDesc->setText("请在流水线列表中选择一个算子进行参数调节。");
+        ui->lblOpDesc->setText("请在左侧流水线列表中选择一个算子，或在算子树中点击查看原理。");
         ui->textDoc->clear();
         return;
     }
@@ -64,7 +68,31 @@ void PropertyPanel::SetCurrentStep(int stepIndex)
     ui->lblOpDesc->setText(QString::fromStdString(op->GetDescription()));
     ui->textDoc->setMarkdown(QString::fromStdString(op->GetPrincipleDoc()));
 
-    BuildParamControls(op);
+    BuildParamControls(op, false);
+}
+
+void PropertyPanel::ShowOperatorPreview(const QString& opName)
+{
+    if (opName.isEmpty())
+    {
+        return;
+    }
+
+    auto op = OpRegistry::Instance().Create(opName.toStdString());
+    if (!op)
+    {
+        return;
+    }
+
+    _isPreviewMode = true;
+    _currentStepIndex = -1;
+    _previewOpNode = std::move(op);
+
+    ui->lblOpTitle->setText(QString("[教学预览] %1").arg(QString::fromStdString(_previewOpNode->GetDisplayName())));
+    ui->lblOpDesc->setText(QString("%1\n(💡 提示：双击或点击添加按钮可将此算子加入流水线)").arg(QString::fromStdString(_previewOpNode->GetDescription())));
+    ui->textDoc->setMarkdown(QString::fromStdString(_previewOpNode->GetPrincipleDoc()));
+
+    BuildParamControls(_previewOpNode.get(), true);
 }
 
 void PropertyPanel::ClearDynamicWidgets()
@@ -84,13 +112,20 @@ void PropertyPanel::ClearDynamicWidgets()
     }
 }
 
-void PropertyPanel::BuildParamControls(IOpNode* opNode)
+void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
 {
     ClearDynamicWidgets();
 
     if (!opNode)
     {
         return;
+    }
+
+    if (isPreview)
+    {
+        auto* tipLabel = new QLabel("📌 默认参数配置展示 (加入流水线后可实时调参):", this);
+        tipLabel->setStyleSheet("color: #f39c12; font-weight: bold; padding: 4px; background: #2d2d30; border-radius: 3px;");
+        ui->dynamicParamsLayout->addWidget(tipLabel);
     }
 
     auto& params = opNode->GetParameters();
@@ -114,7 +149,6 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
             auto* slider = new QSlider(Qt::Horizontal, rowWidget);
             auto* spinBox = new QSpinBox(rowWidget);
 
-            // 安装滚轮事件过滤器并设置焦点策略
             slider->installEventFilter(this);
             spinBox->installEventFilter(this);
             slider->setFocusPolicy(Qt::NoFocus);
@@ -133,22 +167,28 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
             spinBox->setSingleStep(step);
             spinBox->setValue(curVal);
 
-            connect(slider, &QSlider::valueChanged, spinBox, &QSpinBox::setValue);
-            connect(spinBox, QOverload<int>::of(&QSpinBox::valueChanged), slider, &QSlider::setValue);
+            slider->setEnabled(!isPreview);
+            spinBox->setEnabled(!isPreview);
 
-            connect(spinBox, QOverload<int>::of(&QSpinBox::valueChanged), [this, paramName](int val) {
-                if (_pipelineMgr && _currentStepIndex >= 0)
-                {
-                    PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
-                    if (s && s->GetOpNode())
+            if (!isPreview)
+            {
+                connect(slider, &QSlider::valueChanged, spinBox, &QSpinBox::setValue);
+                connect(spinBox, QOverload<int>::of(&QSpinBox::valueChanged), slider, &QSlider::setValue);
+
+                connect(spinBox, QOverload<int>::of(&QSpinBox::valueChanged), [this, paramName](int val) {
+                    if (_pipelineMgr && _currentStepIndex >= 0)
                     {
-                        s->GetOpNode()->SetParameter(paramName, val);
-                        _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                        _pipelineMgr->Execute();
-                        emit ParameterChanged(_currentStepIndex);
+                        PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
+                        if (s && s->GetOpNode())
+                        {
+                            s->GetOpNode()->SetParameter(paramName, val);
+                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
+                            _pipelineMgr->Execute();
+                            emit ParameterChanged(_currentStepIndex);
+                        }
                     }
-                }
-            });
+                });
+            }
 
             ctrlLayout->addWidget(slider, 1);
             ctrlLayout->addWidget(spinBox);
@@ -160,7 +200,6 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
             auto* slider = new QSlider(Qt::Horizontal, rowWidget);
             auto* spinBox = new QDoubleSpinBox(rowWidget);
 
-            // 安装滚轮事件过滤器并设置焦点策略
             slider->installEventFilter(this);
             spinBox->installEventFilter(this);
             slider->setFocusPolicy(Qt::NoFocus);
@@ -180,29 +219,35 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
             spinBox->setDecimals(2);
             spinBox->setValue(curVal);
 
-            connect(slider, &QSlider::valueChanged, [spinBox, scale](int val) {
-                spinBox->setValue(val / static_cast<double>(scale));
-            });
+            slider->setEnabled(!isPreview);
+            spinBox->setEnabled(!isPreview);
 
-            connect(spinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [slider, scale](double val) {
-                slider->blockSignals(true);
-                slider->setValue(static_cast<int>(val * scale));
-                slider->blockSignals(false);
-            });
+            if (!isPreview)
+            {
+                connect(slider, &QSlider::valueChanged, [spinBox, scale](int val) {
+                    spinBox->setValue(val / static_cast<double>(scale));
+                });
 
-            connect(spinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, paramName](double val) {
-                if (_pipelineMgr && _currentStepIndex >= 0)
-                {
-                    PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
-                    if (s && s->GetOpNode())
+                connect(spinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [slider, scale](double val) {
+                    slider->blockSignals(true);
+                    slider->setValue(static_cast<int>(val * scale));
+                    slider->blockSignals(false);
+                });
+
+                connect(spinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [this, paramName](double val) {
+                    if (_pipelineMgr && _currentStepIndex >= 0)
                     {
-                        s->GetOpNode()->SetParameter(paramName, val);
-                        _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                        _pipelineMgr->Execute();
-                        emit ParameterChanged(_currentStepIndex);
+                        PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
+                        if (s && s->GetOpNode())
+                        {
+                            s->GetOpNode()->SetParameter(paramName, val);
+                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
+                            _pipelineMgr->Execute();
+                            emit ParameterChanged(_currentStepIndex);
+                        }
                     }
-                }
-            });
+                });
+            }
 
             ctrlLayout->addWidget(slider, 1);
             ctrlLayout->addWidget(spinBox);
@@ -219,20 +264,24 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
                 combo->addItem(QString::fromStdString(opt));
             }
             combo->setCurrentIndex(param.GetInt());
+            combo->setEnabled(!isPreview);
 
-            connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this, paramName](int idx) {
-                if (_pipelineMgr && _currentStepIndex >= 0)
-                {
-                    PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
-                    if (s && s->GetOpNode())
+            if (!isPreview)
+            {
+                connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this, paramName](int idx) {
+                    if (_pipelineMgr && _currentStepIndex >= 0)
                     {
-                        s->GetOpNode()->SetParameter(paramName, idx);
-                        _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                        _pipelineMgr->Execute();
-                        emit ParameterChanged(_currentStepIndex);
+                        PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
+                        if (s && s->GetOpNode())
+                        {
+                            s->GetOpNode()->SetParameter(paramName, idx);
+                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
+                            _pipelineMgr->Execute();
+                            emit ParameterChanged(_currentStepIndex);
+                        }
                     }
-                }
-            });
+                });
+            }
 
             rowLayout->addWidget(combo);
         }
@@ -240,20 +289,24 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode)
         {
             auto* chk = new QCheckBox(QString::fromStdString(param.DisplayName), rowWidget);
             chk->setChecked(param.GetBool());
+            chk->setEnabled(!isPreview);
 
-            connect(chk, &QCheckBox::toggled, [this, paramName](bool checked) {
-                if (_pipelineMgr && _currentStepIndex >= 0)
-                {
-                    PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
-                    if (s && s->GetOpNode())
+            if (!isPreview)
+            {
+                connect(chk, &QCheckBox::toggled, [this, paramName](bool checked) {
+                    if (_pipelineMgr && _currentStepIndex >= 0)
                     {
-                        s->GetOpNode()->SetParameter(paramName, checked);
-                        _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                        _pipelineMgr->Execute();
-                        emit ParameterChanged(_currentStepIndex);
+                        PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
+                        if (s && s->GetOpNode())
+                        {
+                            s->GetOpNode()->SetParameter(paramName, checked);
+                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
+                            _pipelineMgr->Execute();
+                            emit ParameterChanged(_currentStepIndex);
+                        }
                     }
-                }
-            });
+                });
+            }
 
             rowLayout->addWidget(chk);
         }

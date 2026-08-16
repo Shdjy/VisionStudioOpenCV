@@ -2,6 +2,33 @@
 #include <sstream>
 #include <iomanip>
 
+QString MatUtils::GetMatTypeString(const cv::Mat& mat)
+{
+    if (mat.empty())
+    {
+        return "Empty";
+    }
+
+    uchar depth = mat.type() & CV_MAT_DEPTH_MASK;
+    uchar chans = 1 + (mat.type() >> CV_CN_SHIFT);
+
+    QString r;
+    switch (depth)
+    {
+        case CV_8U:  r = "8U"; break;
+        case CV_8S:  r = "8S"; break;
+        case CV_16U: r = "16U"; break;
+        case CV_16S: r = "16S"; break;
+        case CV_32S: r = "32S"; break;
+        case CV_32F: r = "32F"; break;
+        case CV_64F: r = "64F"; break;
+        default:     r = "User"; break;
+    }
+
+    r += QString("C%1").arg(chans);
+    return r;
+}
+
 QImage MatUtils::MatToQImage(const cv::Mat& mat)
 {
     if (mat.empty())

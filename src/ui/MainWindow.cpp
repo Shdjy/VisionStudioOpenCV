@@ -99,7 +99,7 @@ void MainWindow::InitUiAndDocks()
     _dockHistogram->setWidget(_histogramWidget);
     addDockWidget(Qt::RightDockWidgetArea, _dockHistogram);
 
-    // 7. 底部 Dock: 多语言代码生成 (像 Visual Studio 一样可停靠、可钉住、可拖拽尺寸)
+    // 7. 底部 Dock: 多语言代码生成
     _dockCode = new QDockWidget("多语言代码生成 (Code Generation)", this);
     _dockCode->setObjectName("dockCode");
     configureDock(_dockCode);
@@ -136,21 +136,27 @@ void MainWindow::InitUiAndDocks()
     ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
     ui->actionAbout->setIcon(style()->standardIcon(QStyle::SP_MessageBoxInformation));
 
-    // 11. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标
+    // 11. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标 (带明确选中状态指示)
     ui->mainToolBar->addSeparator();
 
     auto* actionToggleCode = new QAction(style()->standardIcon(QStyle::SP_FileDialogContentsView), "代码生成面板", this);
+    actionToggleCode->setCheckable(true);
+    actionToggleCode->setChecked(_dockCode->isVisible());
     actionToggleCode->setToolTip("显示/隐藏 底部代码生成面板 (Alt+C)");
     actionToggleCode->setStatusTip("快速展开或折叠底部多语言代码生成视口");
     actionToggleCode->setShortcut(QKeySequence("Alt+C"));
     connect(actionToggleCode, &QAction::triggered, this, &MainWindow::OnToggleCodeDock);
+    connect(_dockCode, &QDockWidget::visibilityChanged, actionToggleCode, &QAction::setChecked);
     ui->mainToolBar->addAction(actionToggleCode);
 
-    auto* actionToggleLog = new QAction(style()->standardIcon(QStyle::SP_FileDialogDetailedView), "运行日志面板", this);
+    auto* actionToggleLog = new QAction(style()->standardIcon(QStyle::SP_MessageBoxInformation), "运行日志面板", this);
+    actionToggleLog->setCheckable(true);
+    actionToggleLog->setChecked(_dockLog->isVisible());
     actionToggleLog->setToolTip("显示/隐藏 底部运行日志控制台 (Alt+L)");
     actionToggleLog->setStatusTip("快速展开或折叠底部运行日志视口");
     actionToggleLog->setShortcut(QKeySequence("Alt+L"));
     connect(actionToggleLog, &QAction::triggered, this, &MainWindow::OnToggleLogDock);
+    connect(_dockLog, &QDockWidget::visibilityChanged, actionToggleLog, &QAction::setChecked);
     ui->mainToolBar->addAction(actionToggleLog);
 
     // 12. 视图菜单补充 Dock 控制
@@ -227,8 +233,9 @@ void MainWindow::SetupConnections()
     connect(ui->actionResetLayout, &QAction::triggered, this, &MainWindow::OnResetLayout);
     connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
 
-    // 算子添加
+    // 算子添加与算子树点击即时预览
     connect(_operatorTree, &OperatorTreeWidget::OperatorAddRequested, this, &MainWindow::OnOperatorAddRequested);
+    connect(_operatorTree, &OperatorTreeWidget::OperatorSelected, _propertyPanel, &PropertyPanel::ShowOperatorPreview);
 
     // 流水线联动
     connect(_pipelineList, &PipelineListWidget::StepSelected, this, &MainWindow::OnStepSelected);

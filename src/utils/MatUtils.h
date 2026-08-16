@@ -55,6 +55,11 @@ public:
     static PixelProbeInfo GetPixelInfo(const cv::Mat& mat, int x, int y);
 
     /**
+     * @brief 获取 OpenCV 矩阵类型描述字符串
+     */
+    static QString GetMatTypeString(const cv::Mat& mat);
+
+    /**
      * @brief 图像类型与通道校验
      * @param mat 输入矩阵
      * @param expectedChannels 期望的通道数 (0表示任意)

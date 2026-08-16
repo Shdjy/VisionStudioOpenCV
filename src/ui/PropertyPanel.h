@@ -19,6 +19,7 @@ public:
 
 public slots:
     void SetCurrentStep(int stepIndex);
+    void ShowOperatorPreview(const QString& opName);
 
 signals:
     void ParameterChanged(int stepIndex);
@@ -30,7 +31,9 @@ private:
     Ui::PropertyPanel* ui;
     PipelineManager* _pipelineMgr = nullptr;
     int _currentStepIndex = -1;
+    bool _isPreviewMode = false;
+    std::unique_ptr<IOpNode> _previewOpNode;
 
     void ClearDynamicWidgets();
-    void BuildParamControls(IOpNode* opNode);
+    void BuildParamControls(IOpNode* opNode, bool isPreview = false);
 };
