@@ -1,12 +1,73 @@
 #include "PipelineListWidget.h"
 #include "ui_PipelineListWidget.h"
 #include <QMessageBox>
+#include <QPainter>
+#include <QPen>
+#include <QPixmap>
+#include <QIcon>
+#include <QStyle>
+
+namespace
+{
+    /**
+     * @brief 绘制高清抗锯齿红色 ❌ 图标
+     * @param size 图标像素尺寸
+     * @return 精致的红色 ❌ 图标
+     */
+    static QIcon CreateRedCrossIcon(int size = 32)
+    {
+        QPixmap pixmap(size, size);
+        pixmap.fill(Qt::transparent);
+
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+
+        // 鲜明醒目的现代工业红与圆润端点
+        QPen pen(QColor(235, 60, 60), size * 0.16, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(pen);
+
+        int margin = size * 0.22;
+        painter.drawLine(margin, margin, size - margin, size - margin);
+        painter.drawLine(margin, size - margin, size - margin, margin);
+
+        return QIcon(pixmap);
+    }
+}
 
 PipelineListWidget::PipelineListWidget(QWidget* parent)
     : QWidget(parent)
     , ui(new Ui::PipelineListWidget)
 {
     ui->setupUi(this);
+
+    // 设置与顶部主菜单一致的紧凑图标栏风格
+    const QSize btnIconSize(18, 18);
+    const QSize btnSize(28, 28);
+
+    ui->btnMoveUp->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
+    ui->btnMoveUp->setIconSize(btnIconSize);
+    ui->btnMoveUp->setFixedSize(btnSize);
+    ui->btnMoveUp->setToolTip("上移所选算子步骤 (Up)");
+
+    ui->btnMoveDown->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
+    ui->btnMoveDown->setIconSize(btnIconSize);
+    ui->btnMoveDown->setFixedSize(btnSize);
+    ui->btnMoveDown->setToolTip("下移所选算子步骤 (Down)");
+
+    ui->btnRemove->setIcon(CreateRedCrossIcon(32));
+    ui->btnRemove->setIconSize(btnIconSize);
+    ui->btnRemove->setFixedSize(btnSize);
+    ui->btnRemove->setToolTip("删除所选算子步骤 (Delete / 红色❌)");
+
+    ui->btnClear->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
+    ui->btnClear->setIconSize(btnIconSize);
+    ui->btnClear->setFixedSize(btnSize);
+    ui->btnClear->setToolTip("清空流水线所有步骤 (Clear)");
+
+    ui->btnRun->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    ui->btnRun->setIconSize(btnIconSize);
+    ui->btnRun->setFixedSize(btnSize);
+    ui->btnRun->setToolTip("立即执行流水线 (Run / F5)");
 
     connect(ui->btnMoveUp, &QToolButton::clicked, this, &PipelineListWidget::OnMoveUpClicked);
     connect(ui->btnMoveDown, &QToolButton::clicked, this, &PipelineListWidget::OnMoveDownClicked);

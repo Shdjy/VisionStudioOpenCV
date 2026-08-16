@@ -252,4 +252,16 @@ if(WIN32 AND MINGW)
         message(WARNING "windeployqt was not found; direct execution may miss Qt runtime libraries")
     endif()
 endif()
+
+# Deploy portable packaging scripts to target binary directory
+if(WIN32)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_portable.bat"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_portable.ps1"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Deploying portable package scripts to executable directory"
+    )
+endif()
+
 message(STATUS "Configured ${PROJECT_NAME} successfully.")

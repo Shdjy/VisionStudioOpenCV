@@ -77,7 +77,6 @@ void OperatorTreeWidget::BuildCategoryTree(const std::vector<OpMetadata>& ops)
         auto* catItem = new QTreeWidgetItem(ui->treeOperators);
         catItem->setText(0, QString("%1  [%2]").arg(QString::fromStdString(OpCategoryUtils::ToString(cat))).arg(it->second.size()));
         catItem->setFlags(catItem->flags() & ~Qt::ItemIsSelectable);
-        catItem->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
 
         QFont font = catItem->font(0);
         font.setBold(true);
