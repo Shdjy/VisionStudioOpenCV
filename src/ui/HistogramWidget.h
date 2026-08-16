@@ -8,6 +8,9 @@ namespace Ui {
 class HistogramWidget;
 }
 
+class HistogramCanvas;
+class ProfileCanvas;
+
 class HistogramWidget : public QWidget
 {
     Q_OBJECT
@@ -20,15 +23,8 @@ public slots:
     void UpdateHistogram(const cv::Mat& mat);
     void UpdateLineProfile(const LineProfileData& profileData);
 
-protected:
-    void resizeEvent(QResizeEvent* event) override;
-
 private:
     Ui::HistogramWidget* ui;
-    cv::Mat _currentMat;
-    LineProfileData _profileData;
-    bool _hasProfileData = false;
-
-    void RenderHistogram();
-    void RenderLineProfile();
+    HistogramCanvas* _histCanvas = nullptr;
+    ProfileCanvas* _profileCanvas = nullptr;
 };

@@ -306,13 +306,6 @@ void MainWindow::SetupConnections()
     // 视口与直方图/剖面联动
     connect(_imageViewer, &ImageViewer::ImageUpdated, _histogramWidget, &HistogramWidget::UpdateHistogram);
     connect(_imageViewer, &ImageViewer::LineProfileUpdated, _histogramWidget, &HistogramWidget::UpdateLineProfile);
-    connect(_imageViewer, &ImageViewer::LineProfileUpdated, [this](const LineProfileData& data) {
-        if (data.lengthPx > 1.0 && !_dockHistogram->isVisible())
-        {
-            _dockHistogram->show();
-            _dockHistogram->raise();
-        }
-    });
 }
 
 void MainWindow::LoadDefaultTestImage()
