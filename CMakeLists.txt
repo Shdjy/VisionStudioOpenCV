@@ -93,6 +93,7 @@ set(CORE_SOURCES
     src/core/operators/ArithmeticOps.cpp
     src/core/operators/InteractiveMaskOp.cpp
     src/core/operators/AdvancedOps.cpp
+    src/core/operators/IndustrialOps.cpp
 )
 
 set(BLL_SOURCES

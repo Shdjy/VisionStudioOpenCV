@@ -12,6 +12,7 @@
 #include "operators/ArithmeticOps.h"
 #include "operators/InteractiveMaskOp.h"
 #include "operators/AdvancedOps.h"
+#include "operators/IndustrialOps.h"
 #include <algorithm>
 
 std::unique_ptr<IOpNode> OpRegistry::Create(const std::string& name) const
@@ -109,6 +110,7 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<DilateOp>();
     Register<ErodeOp>();
     Register<MorphologyExOp>();
+    Register<SkeletonThinningOp>();
 
     // 6. 几何与空间变换 (Geometry & Transformations)
     Register<ResizeOp>();
@@ -117,6 +119,7 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<CropRoiOp>();
     Register<PerspectiveTransformOp>();
     Register<PolarTransformOp>();
+    Register<CylindricalUnrollOp>();
     Register<ImagePyramidOp>();
 
     // 7. 边缘与梯度检测 (Edge & Gradient Detection)
@@ -134,11 +137,13 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<HoughLinesPOp>();
     Register<HoughCirclesOp>();
     Register<FitLineOp>();
+    Register<RansacFitCircleOp>();
 
     // 10. 特征提取与模板匹配 (Features & Matching)
     Register<CornerHarrisOp>();
     Register<GoodFeaturesToTrackOp>();
     Register<MatchTemplateOp>();
+    Register<BarcodeQrOp>();
 
     // 11. 图像增强与修复仿真 (Enhancement & Restoration)
     Register<BrightnessContrastOp>();

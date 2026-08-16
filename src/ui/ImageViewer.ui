@@ -88,6 +88,26 @@
        </widget>
       </item>
       <item>
+       <widget class="Line" name="lineSepProfile">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="btnLineProfile">
+        <property name="toolTip">
+         <string>开启/关闭交互式测线灰度剖面分析 (Profile Line / 快捷键 L)</string>
+        </property>
+        <property name="text">
+         <string>📏 测线剖面</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="Line" name="lineSep1">
         <property name="orientation">
          <enum>Qt::Vertical</enum>

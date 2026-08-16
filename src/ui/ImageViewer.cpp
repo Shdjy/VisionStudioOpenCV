@@ -15,7 +15,35 @@ ImageViewer::ImageViewer(QWidget* parent)
     _scene->addItem(_pixmapItem);
     ui->graphicsView->setScene(_scene);
 
-    ui->graphicsView->setRenderHint(QPainter::Antialiasing, false);
+    // 初始化测线矢量图元 (置于顶层)
+    _profileLineItem = new QGraphicsPathItem();
+    _profileLineItem->setZValue(100);
+    _profileLineItem->setVisible(false);
+    _scene->addItem(_profileLineItem);
+
+    _startHandleItem = new QGraphicsEllipseItem(-5, -5, 10, 10);
+    _startHandleItem->setPen(QPen(QColor(0, 255, 255), 2));
+    _startHandleItem->setBrush(QBrush(QColor(0, 200, 255, 180)));
+    _startHandleItem->setZValue(101);
+    _startHandleItem->setVisible(false);
+    _scene->addItem(_startHandleItem);
+
+    _endHandleItem = new QGraphicsEllipseItem(-5, -5, 10, 10);
+    _endHandleItem->setPen(QPen(QColor(255, 128, 0), 2));
+    _endHandleItem->setBrush(QBrush(QColor(255, 100, 0, 180)));
+    _endHandleItem->setZValue(101);
+    _endHandleItem->setVisible(false);
+    _scene->addItem(_endHandleItem);
+
+    _profileTextItem = new QGraphicsTextItem();
+    _profileTextItem->setDefaultTextColor(QColor(255, 255, 0));
+    QFont font("Segoe UI", 9, QFont::Bold);
+    _profileTextItem->setFont(font);
+    _profileTextItem->setZValue(102);
+    _profileTextItem->setVisible(false);
+    _scene->addItem(_profileTextItem);
+
+    ui->graphicsView->setRenderHint(QPainter::Antialiasing, true);
     ui->graphicsView->setRenderHint(QPainter::SmoothPixmapTransform, true);
     ui->graphicsView->viewport()->installEventFilter(this);
     ui->graphicsView->setMouseTracking(true);
@@ -26,6 +54,7 @@ ImageViewer::ImageViewer(QWidget* parent)
     connect(ui->btnZoomOut, &QToolButton::clicked, this, &ImageViewer::ZoomOut);
     connect(ui->btnZoomFit, &QToolButton::clicked, this, &ImageViewer::ZoomFit);
     connect(ui->btnZoomOriginal, &QToolButton::clicked, this, &ImageViewer::ZoomOriginal);
+    connect(ui->btnLineProfile, &QToolButton::toggled, this, &ImageViewer::SetLineProfileActive);
 
     connect(ui->comboCompareMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ImageViewer::OnCompareModeChanged);
     connect(ui->sliderSplitPos, &QSlider::valueChanged, this, &ImageViewer::OnSplitSliderChanged);
@@ -59,6 +88,11 @@ void ImageViewer::SetImage(const cv::Mat& processedMat, const cv::Mat& originalM
             .arg(_currentProcessedMat.channels())
             .arg(MatUtils::GetMatTypeString(_currentProcessedMat));
         ui->lblImageInfo->setText(info);
+    }
+
+    if (_isLineProfileMode && _hasValidProfileLine)
+    {
+        CalculateAndEmitLineProfile();
     }
 }
 
@@ -240,14 +274,245 @@ bool ImageViewer::eventFilter(QObject* watched, QEvent* event)
             }
             return true;
         }
+        else if (event->type() == QEvent::MouseButtonPress)
+        {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (_isLineProfileMode && mouseEvent->button() == Qt::LeftButton)
+            {
+                QPointF scenePos = ui->graphicsView->mapToScene(mouseEvent->pos());
+                
+                // 检查是否点中现有端点
+                if (_hasValidProfileLine)
+                {
+                    double distStart = QLineF(scenePos, _profileStartPt).length();
+                    double distEnd = QLineF(scenePos, _profileEndPt).length();
+                    if (distStart <= 12.0)
+                    {
+                        _dragHandle = 1;
+                        return true;
+                    }
+                    else if (distEnd <= 12.0)
+                    {
+                        _dragHandle = 2;
+                        return true;
+                    }
+                }
+
+                // 重新开始拉新测线
+                _isDrawingLine = true;
+                _dragHandle = 2;
+                _profileStartPt = scenePos;
+                _profileEndPt = scenePos;
+                _hasValidProfileLine = true;
+                UpdateProfileLineVisual();
+                return true;
+            }
+        }
         else if (event->type() == QEvent::MouseMove)
         {
             auto* mouseEvent = static_cast<QMouseEvent*>(event);
             QPointF scenePos = ui->graphicsView->mapToScene(mouseEvent->pos());
+
+            if (_isLineProfileMode)
+            {
+                if (_isDrawingLine || _dragHandle != 0)
+                {
+                    if (_dragHandle == 1)
+                    {
+                        _profileStartPt = scenePos;
+                    }
+                    else if (_dragHandle == 2)
+                    {
+                        _profileEndPt = scenePos;
+                    }
+                    UpdateProfileLineVisual();
+                    CalculateAndEmitLineProfile();
+                    return true;
+                }
+            }
+
             HandleMouseMove(scenePos);
+        }
+        else if (event->type() == QEvent::MouseButtonRelease)
+        {
+            auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (_isLineProfileMode && mouseEvent->button() == Qt::LeftButton)
+            {
+                if (_isDrawingLine || _dragHandle != 0)
+                {
+                    _isDrawingLine = false;
+                    _dragHandle = 0;
+                    UpdateProfileLineVisual();
+                    CalculateAndEmitLineProfile();
+                    return true;
+                }
+            }
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+void ImageViewer::SetLineProfileActive(bool active)
+{
+    _isLineProfileMode = active;
+    ui->btnLineProfile->setChecked(active);
+
+    if (active)
+    {
+        ui->graphicsView->setDragMode(QGraphicsView::NoDrag);
+        ui->graphicsView->viewport()->setCursor(Qt::CrossCursor);
+
+        if (!_hasValidProfileLine && !_currentProcessedMat.empty())
+        {
+            int w = _currentProcessedMat.cols;
+            int h = _currentProcessedMat.rows;
+            _profileStartPt = QPointF(w * 0.2, h * 0.5);
+            _profileEndPt = QPointF(w * 0.8, h * 0.5);
+            _hasValidProfileLine = true;
+        }
+
+        UpdateProfileLineVisual();
+        CalculateAndEmitLineProfile();
+    }
+    else
+    {
+        ui->graphicsView->setDragMode(QGraphicsView::ScrollHandDrag);
+        ui->graphicsView->viewport()->setCursor(Qt::ArrowCursor);
+        _profileLineItem->setVisible(false);
+        _startHandleItem->setVisible(false);
+        _endHandleItem->setVisible(false);
+        _profileTextItem->setVisible(false);
+    }
+}
+
+void ImageViewer::UpdateProfileLineVisual()
+{
+    if (!_hasValidProfileLine || !_isLineProfileMode)
+    {
+        _profileLineItem->setVisible(false);
+        _startHandleItem->setVisible(false);
+        _endHandleItem->setVisible(false);
+        _profileTextItem->setVisible(false);
+        return;
+    }
+
+    _profileLineItem->setVisible(true);
+    _startHandleItem->setVisible(true);
+    _endHandleItem->setVisible(true);
+    _profileTextItem->setVisible(true);
+
+    QPainterPath path;
+    path.moveTo(_profileStartPt);
+    path.lineTo(_profileEndPt);
+    _profileLineItem->setPath(path);
+
+    QPen pen(QColor(0, 255, 255, 220), 2.0, Qt::DashLine, Qt::RoundCap);
+    _profileLineItem->setPen(pen);
+
+    _startHandleItem->setPos(_profileStartPt);
+    _endHandleItem->setPos(_profileEndPt);
+
+    double len = QLineF(_profileStartPt, _profileEndPt).length();
+    QPointF midPt = (_profileStartPt + _profileEndPt) / 2.0;
+    _profileTextItem->setPlainText(QString("📏 L: %1 px").arg(QString::number(len, 'f', 1)));
+    _profileTextItem->setPos(midPt + QPointF(8, -20));
+}
+
+void ImageViewer::CalculateAndEmitLineProfile()
+{
+    if (_currentProcessedMat.empty() || !_hasValidProfileLine)
+    {
+        return;
+    }
+
+    LineProfileData data;
+    data.startPoint = _profileStartPt;
+    data.endPoint = _profileEndPt;
+
+    double dx = _profileEndPt.x() - _profileStartPt.x();
+    double dy = _profileEndPt.y() - _profileStartPt.y();
+    data.lengthPx = std::sqrt(dx * dx + dy * dy);
+
+    int numSamples = std::max(2, static_cast<int>(std::round(data.lengthPx)));
+    data.samplePositions.resize(numSamples);
+    data.grayValues.resize(numSamples);
+    data.gradientValues.resize(numSamples, 0.0f);
+
+    bool is3Channel = (_currentProcessedMat.channels() == 3);
+    data.hasRgb = is3Channel;
+    if (is3Channel)
+    {
+        data.bValues.resize(numSamples);
+        data.gValues.resize(numSamples);
+        data.rValues.resize(numSamples);
+    }
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        double t = (numSamples > 1) ? (static_cast<double>(i) / (numSamples - 1)) : 0.0;
+        double curX = _profileStartPt.x() + t * dx;
+        double curY = _profileStartPt.y() + t * dy;
+
+        data.samplePositions[i] = static_cast<float>(t * data.lengthPx);
+
+        int x0 = std::clamp(static_cast<int>(std::floor(curX)), 0, _currentProcessedMat.cols - 1);
+        int x1 = std::clamp(x0 + 1, 0, _currentProcessedMat.cols - 1);
+        int y0 = std::clamp(static_cast<int>(std::floor(curY)), 0, _currentProcessedMat.rows - 1);
+        int y1 = std::clamp(y0 + 1, 0, _currentProcessedMat.rows - 1);
+
+        double fx = curX - x0;
+        double fy = curY - y0;
+
+        if (is3Channel)
+        {
+            auto p00 = _currentProcessedMat.at<cv::Vec3b>(y0, x0);
+            auto p01 = _currentProcessedMat.at<cv::Vec3b>(y0, x1);
+            auto p10 = _currentProcessedMat.at<cv::Vec3b>(y1, x0);
+            auto p11 = _currentProcessedMat.at<cv::Vec3b>(y1, x1);
+
+            float b = static_cast<float>((1 - fx) * (1 - fy) * p00[0] + fx * (1 - fy) * p01[0] + (1 - fx) * fy * p10[0] + fx * fy * p11[0]);
+            float g = static_cast<float>((1 - fx) * (1 - fy) * p00[1] + fx * (1 - fy) * p01[1] + (1 - fx) * fy * p10[1] + fx * fy * p11[1]);
+            float r = static_cast<float>((1 - fx) * (1 - fy) * p00[2] + fx * (1 - fy) * p01[2] + (1 - fx) * fy * p10[2] + fx * fy * p11[2]);
+
+            data.bValues[i] = b;
+            data.gValues[i] = g;
+            data.rValues[i] = r;
+            data.grayValues[i] = 0.114f * b + 0.587f * g + 0.299f * r;
+        }
+        else
+        {
+            float v00 = _currentProcessedMat.at<uchar>(y0, x0);
+            float v01 = _currentProcessedMat.at<uchar>(y0, x1);
+            float v10 = _currentProcessedMat.at<uchar>(y1, x0);
+            float v11 = _currentProcessedMat.at<uchar>(y1, x1);
+
+            float val = static_cast<float>((1 - fx) * (1 - fy) * v00 + fx * (1 - fy) * v01 + (1 - fx) * fy * v10 + fx * fy * v11);
+            data.grayValues[i] = val;
+        }
+    }
+
+    float maxGrad = 0.0f;
+    int maxGradIdx = -1;
+    for (int i = 1; i < numSamples - 1; ++i)
+    {
+        float grad = std::abs(data.grayValues[i + 1] - data.grayValues[i - 1]) / 2.0f;
+        data.gradientValues[i] = grad;
+        if (grad > maxGrad)
+        {
+            maxGrad = grad;
+            maxGradIdx = i;
+        }
+    }
+
+    data.maxGradientValue = maxGrad;
+    data.maxGradientIndex = maxGradIdx;
+    if (maxGradIdx >= 0)
+    {
+        double t = static_cast<double>(maxGradIdx) / (numSamples - 1);
+        data.maxGradientPoint = QPointF(_profileStartPt.x() + t * dx, _profileStartPt.y() + t * dy);
+    }
+
+    emit LineProfileUpdated(data);
 }
 
 void ImageViewer::HandleMouseMove(const QPointF& scenePos)

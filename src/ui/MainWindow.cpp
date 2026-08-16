@@ -116,8 +116,8 @@ void MainWindow::InitUiAndDocks()
     _dockProperties->setWidget(_propertyPanel);
     addDockWidget(Qt::RightDockWidgetArea, _dockProperties);
 
-    // 6. 右侧 Dock: 直方图分析
-    _dockHistogram = new QDockWidget("直方图分析 (Histogram)", this);
+    // 6. 右侧 Dock: 直方图与剖面分析
+    _dockHistogram = new QDockWidget("直方图与剖面分析 (Analysis)", this);
     _dockHistogram->setObjectName("dockHistogram");
     configureDock(_dockHistogram);
     _histogramWidget = new HistogramWidget(_dockHistogram);
@@ -303,8 +303,16 @@ void MainWindow::SetupConnections()
     connect(_pipelineList, &PipelineListWidget::StepSelected, this, &MainWindow::OnStepSelected);
     connect(&_pipelineManager, &PipelineManager::ExecutionCompleted, this, &MainWindow::OnPipelineExecutionCompleted);
 
-    // 视口与直方图联动
+    // 视口与直方图/剖面联动
     connect(_imageViewer, &ImageViewer::ImageUpdated, _histogramWidget, &HistogramWidget::UpdateHistogram);
+    connect(_imageViewer, &ImageViewer::LineProfileUpdated, _histogramWidget, &HistogramWidget::UpdateLineProfile);
+    connect(_imageViewer, &ImageViewer::LineProfileUpdated, [this](const LineProfileData& data) {
+        if (data.lengthPx > 1.0 && !_dockHistogram->isVisible())
+        {
+            _dockHistogram->show();
+            _dockHistogram->raise();
+        }
+    });
 }
 
 void MainWindow::LoadDefaultTestImage()
