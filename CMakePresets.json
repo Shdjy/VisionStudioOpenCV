@@ -11,7 +11,7 @@
             "displayName": "Qt Creator (MinGW 6.8.2 64-bit)",
             "description": "Qt Creator MinGW 6.8.2 / OpenCV 4.9 默认预设配置",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/qt-mingw",
+            "binaryDir": "${sourceDir}/build/qt6-mingw/Release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_PREFIX_PATH": "D:/Qt/6.8.2/mingw_64;D:/opencv4.9/build_mingw"

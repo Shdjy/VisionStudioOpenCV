@@ -199,4 +199,57 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "C
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endif()
 
+# Deploy OpenCV runtime libraries next to the executable for Qt Creator runs.
+if(WIN32 AND MINGW)
+    if(DEFINED OpenCV_INSTALL_PATH)
+        set(OPENCV_RUNTIME_DIR "${OpenCV_INSTALL_PATH}/bin")
+    elseif(DEFINED OpenCV_DIR)
+        set(OPENCV_RUNTIME_DIR "${OpenCV_DIR}/bin")
+    endif()
+
+    if(OPENCV_RUNTIME_DIR AND EXISTS "${OPENCV_RUNTIME_DIR}")
+        file(GLOB OPENCV_RUNTIME_DLLS CONFIGURE_DEPENDS
+            "${OPENCV_RUNTIME_DIR}/*.dll"
+        )
+
+        if(OPENCV_RUNTIME_DLLS)
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${OPENCV_RUNTIME_DLLS}
+                    "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+                COMMAND_EXPAND_LISTS
+                COMMENT "Deploying OpenCV runtime libraries"
+            )
+            message(STATUS "OpenCV runtime deployment enabled: ${OPENCV_RUNTIME_DIR}")
+        else()
+            message(WARNING "No OpenCV runtime libraries found in ${OPENCV_RUNTIME_DIR}")
+        endif()
+    endif()
+endif()
+# Deploy Qt libraries, MinGW runtime libraries, and platform plugins.
+if(WIN32 AND MINGW)
+    get_target_property(QT_QMAKE_PATH Qt${QT_VERSION_MAJOR}::qmake IMPORTED_LOCATION)
+    if(QT_QMAKE_PATH)
+        get_filename_component(QT_RUNTIME_BIN_DIR "${QT_QMAKE_PATH}" DIRECTORY)
+        find_program(QT_WINDEPLOYQT_EXECUTABLE
+            NAMES windeployqt windeployqt.exe
+            HINTS "${QT_RUNTIME_BIN_DIR}"
+            NO_DEFAULT_PATH
+        )
+    endif()
+
+    if(QT_WINDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}"
+                --no-translations
+                --compiler-runtime
+                "$<TARGET_FILE:${PROJECT_NAME}>"
+            COMMENT "Deploying Qt runtime libraries"
+            VERBATIM
+        )
+        message(STATUS "Qt runtime deployment enabled: ${QT_WINDEPLOYQT_EXECUTABLE}")
+    else()
+        message(WARNING "windeployqt was not found; direct execution may miss Qt runtime libraries")
+    endif()
+endif()
 message(STATUS "Configured ${PROJECT_NAME} successfully.")
