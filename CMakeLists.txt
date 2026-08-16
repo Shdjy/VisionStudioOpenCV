@@ -126,6 +126,7 @@ set(UI_FORMS
 
 set(RESOURCES
     src/resources/resources.qrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/resources/app_res.o
 )
 
 # ----------------------------------------------------------------------------

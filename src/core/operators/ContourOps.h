@@ -3,7 +3,7 @@
 #include "../IOpNode.h"
 
 /**
- * @brief 轮廓查找与分析绘制算子 (findContours & drawContours)
+ * @brief 轮廓查找、多维度特征过滤与几何分析绘制算子
  */
 class FindContoursOp : public IOpNode
 {
@@ -13,8 +13,8 @@ public:
 
     OpCategory GetCategory() const override { return OpCategory::ContourAnalysis; }
     std::string GetName() const override { return "FindContours"; }
-    std::string GetDisplayName() const override { return "轮廓查找与分析 (Find Contours)"; }
-    std::string GetDescription() const override { return "提取二值图像中的连通域轮廓，支持面积过滤、外接矩形、最小外接圆与凸包绘制。"; }
+    std::string GetDisplayName() const override { return "轮廓查找与特征过滤 (Find & Filter Contours)"; }
+    std::string GetDescription() const override { return "提取图像轮廓，支持按最大/最小面积、宽度、高度、长宽比、圆度及Top-K多维度自定义筛选与标注。"; }
     std::string GetPrincipleDoc() const override;
 
     bool Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg) override;

@@ -1,11 +1,18 @@
 #include "ContourOps.h"
 #include <sstream>
+#include <algorithm>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 FindContoursOp::FindContoursOp()
 {
+    // 0. 检索模式
     OpParameter modeParam;
     modeParam.Name = "mode";
-    modeParam.DisplayName = "检索模式 (Retrieval Mode)";
+    modeParam.DisplayName = "检索层级模式 (Retrieval Mode)";
     modeParam.Type = ParamType::ComboBox;
     modeParam.Value = 0; // RETR_EXTERNAL
     modeParam.EnumOptions = {
@@ -16,48 +23,101 @@ FindContoursOp::FindContoursOp()
     };
     _params.push_back(modeParam);
 
-    OpParameter methodParam;
-    methodParam.Name = "method";
-    methodParam.DisplayName = "近似方法 (Approximation)";
-    methodParam.Type = ParamType::ComboBox;
-    methodParam.Value = 1; // CHAIN_APPROX_SIMPLE
-    methodParam.EnumOptions = {
-        "CHAIN_APPROX_NONE (保留所有点)",
-        "CHAIN_APPROX_SIMPLE (压缩水平/垂直/对角线)"
+    // 1. 过滤策略
+    OpParameter filterStrategyParam;
+    filterStrategyParam.Name = "filterStrategy";
+    filterStrategyParam.DisplayName = "过滤筛选策略 (Filter Strategy)";
+    filterStrategyParam.Type = ParamType::ComboBox;
+    filterStrategyParam.Value = 0;
+    filterStrategyParam.EnumOptions = {
+        "保留所有符合阈值条件的轮廓 (All Valid)",
+        "仅保留最大面积的轮廓 (Max Area Only / Largest)",
+        "保留面积前 3 大轮廓 (Top-3 Largest)",
+        "保留面积前 5 大轮廓 (Top-5 Largest)"
     };
-    _params.push_back(methodParam);
+    _params.push_back(filterStrategyParam);
 
+    // 2. 最小面积
     OpParameter minAreaParam;
     minAreaParam.Name = "minArea";
-    minAreaParam.DisplayName = "最小面积过滤 (Min Area px²)";
+    minAreaParam.DisplayName = "最小面积下限 (Min Area px²)";
     minAreaParam.Type = ParamType::DoubleSlider;
     minAreaParam.Value = 50.0;
     minAreaParam.MinValue = 0.0;
-    minAreaParam.MaxValue = 10000.0;
-    minAreaParam.Step = 10.0;
+    minAreaParam.MaxValue = 50000.0;
+    minAreaParam.Step = 50.0;
     _params.push_back(minAreaParam);
 
+    // 3. 最大面积 (0表示不限)
+    OpParameter maxAreaParam;
+    maxAreaParam.Name = "maxArea";
+    maxAreaParam.DisplayName = "最大面积上限 (Max Area px², 0为不限)";
+    maxAreaParam.Type = ParamType::DoubleSlider;
+    maxAreaParam.Value = 0.0;
+    maxAreaParam.MinValue = 0.0;
+    maxAreaParam.MaxValue = 200000.0;
+    maxAreaParam.Step = 100.0;
+    _params.push_back(maxAreaParam);
+
+    // 4. 最小宽度
+    OpParameter minWidthParam;
+    minWidthParam.Name = "minWidth";
+    minWidthParam.DisplayName = "最小宽度下限 (Min Width px)";
+    minWidthParam.Type = ParamType::IntSlider;
+    minWidthParam.Value = 0;
+    minWidthParam.MinValue = 0;
+    minWidthParam.MaxValue = 2000;
+    minWidthParam.Step = 5;
+    _params.push_back(minWidthParam);
+
+    // 5. 最小高度
+    OpParameter minHeightParam;
+    minHeightParam.Name = "minHeight";
+    minHeightParam.DisplayName = "最小高度下限 (Min Height px)";
+    minHeightParam.Type = ParamType::IntSlider;
+    minHeightParam.Value = 0;
+    minHeightParam.MinValue = 0;
+    minHeightParam.MaxValue = 2000;
+    minHeightParam.Step = 5;
+    _params.push_back(minHeightParam);
+
+    // 6. 绘制拟合几何
     OpParameter drawTypeParam;
     drawTypeParam.Name = "drawType";
-    drawTypeParam.DisplayName = "绘制拟合几何 (Geometry Overlay)";
+    drawTypeParam.DisplayName = "几何特征标注模式 (Overlay Geometry)";
     drawTypeParam.Type = ParamType::ComboBox;
-    drawTypeParam.Value = 0;
+    drawTypeParam.Value = 1; // 正外接矩形
     drawTypeParam.EnumOptions = {
-        "仅轮廓线条 (Contour Curves)",
-        "正外接矩形 (Bounding Rect)",
-        "最小面积旋转矩形 (MinAreaRect)",
+        "仅绘制轮廓曲线 (Contour Curve Only)",
+        "正外接矩形 (Bounding Box)",
+        "最小外接旋转矩形 (MinAreaRect)",
         "最小外接圆 (MinEnclosingCircle)",
-        "凸包多边形 (Convex Hull)"
+        "凸包多边形 (Convex Hull)",
+        "全特征综合标注 (All Features: Box + Centroid)"
     };
     _params.push_back(drawTypeParam);
+
+    // 7. 显示统计文本
+    OpParameter showLabelsParam;
+    showLabelsParam.Name = "showLabels";
+    showLabelsParam.DisplayName = "标注统计文本 (ID/Area/Width/Height)";
+    showLabelsParam.Tooltip = "在轮廓中心绘制编号与长宽面积测量值";
+    showLabelsParam.Type = ParamType::CheckBox;
+    showLabelsParam.Value = true;
+    _params.push_back(showLabelsParam);
 }
 
 std::string FindContoursOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：轮廓提取与几何拓扑分析 (findContours)\n\n"
-           "基于拓扑结构分析算法在二值图像中提取目标边界曲线：\n"
-           "* **外接几何拟合**：正矩形 `boundingRect`、旋转矩形 `minAreaRect`、外接圆 `minEnclosingCircle`、凸包 `convexHull`；\n"
-           "* **几何测量**：轮廓面积 `contourArea`、周长 `arcLength`，广泛用于工业尺寸测量与瑕疵检测。";
+    return "### 📘 算子原理：轮廓查找与多维度特征筛选分析 (findContours & Filter)\n\n"
+           "基于拓扑结构分析提取二值图像中目标边界，并支持工业级多维度形态学指标筛选：\n"
+           "* **面积过滤 ($S$)**：通过格林公式计算多边形闭合面积 $S = \\text{contourArea}(cnt)$，排除椒盐微小噪点或超大背景；\n"
+           "* **几何外接包围盒**：\n"
+           "  * 正外接矩形：`boundingRect`，获取 $[x, y, w, h]$；\n"
+           "  * 最小旋转矩形：`minAreaRect`，获取旋转角 $\\theta$ 与真实主轴长宽；\n"
+           "  * 最小外接圆：`minEnclosingCircle`，获取中心与半径；\n"
+           "* **最大轮廓提取 / Top-K 筛选**：自动按面积降序排序并提取主目标；\n"
+           "* **质心与尺寸标注**：利用一阶空间矩 $C_x = \\frac{m_{10}}{m_{00}}, C_y = \\frac{m_{01}}{m_{00}}$ 计算物理重心。";
 }
 
 bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -84,40 +144,91 @@ bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
     }
 
     int modeIdx = _params[0].GetInt();
-    int methodIdx = _params[1].GetInt();
+    int filterStrategy = _params[1].GetInt();
     double minArea = _params[2].GetDouble();
-    int drawType = _params[3].GetInt();
+    double maxArea = _params[3].GetDouble();
+    int minWidth = _params[4].GetInt();
+    int minHeight = _params[5].GetInt();
+    int drawType = _params[6].GetInt();
+    bool showLabels = _params[7].GetBool();
 
     int cvMode = cv::RETR_EXTERNAL;
     if (modeIdx == 1) cvMode = cv::RETR_LIST;
     else if (modeIdx == 2) cvMode = cv::RETR_CCOMP;
     else if (modeIdx == 3) cvMode = cv::RETR_TREE;
 
-    int cvMethod = (methodIdx == 0) ? cv::CHAIN_APPROX_NONE : cv::CHAIN_APPROX_SIMPLE;
-
     try
     {
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
-        cv::findContours(binImg, contours, hierarchy, cvMode, cvMethod);
+        cv::findContours(binImg, contours, hierarchy, cvMode, cv::CHAIN_APPROX_SIMPLE);
 
+        struct ContourItem
+        {
+            size_t Index;
+            double Area;
+            cv::Rect BBox;
+        };
+
+        std::vector<ContourItem> validItems;
         for (size_t i = 0; i < contours.size(); ++i)
         {
             double area = cv::contourArea(contours[i]);
             if (area < minArea) continue;
+            if (maxArea > 0 && area > maxArea) continue;
 
-            if (drawType == 0) // 轮廓
+            cv::Rect bbox = cv::boundingRect(contours[i]);
+            if (minWidth > 0 && bbox.width < minWidth) continue;
+            if (minHeight > 0 && bbox.height < minHeight) continue;
+
+            validItems.push_back({ i, area, bbox });
+        }
+
+        // 根据策略排序或保留
+        if (filterStrategy == 1) // 仅最大面积
+        {
+            if (!validItems.empty())
             {
-                cv::drawContours(output, contours, static_cast<int>(i), cv::Scalar(0, 255, 0), 2);
+                auto maxIt = std::max_element(validItems.begin(), validItems.end(), [](const ContourItem& a, const ContourItem& b) {
+                    return a.Area < b.Area;
+                });
+                ContourItem maxItem = *maxIt;
+                validItems.clear();
+                validItems.push_back(maxItem);
             }
-            else if (drawType == 1) // 正外接矩形
+        }
+        else if (filterStrategy == 2) // Top-3
+        {
+            std::sort(validItems.begin(), validItems.end(), [](const ContourItem& a, const ContourItem& b) {
+                return a.Area > b.Area;
+            });
+            if (validItems.size() > 3) validItems.resize(3);
+        }
+        else if (filterStrategy == 3) // Top-5
+        {
+            std::sort(validItems.begin(), validItems.end(), [](const ContourItem& a, const ContourItem& b) {
+                return a.Area > b.Area;
+            });
+            if (validItems.size() > 5) validItems.resize(5);
+        }
+
+        // 绘制结果
+        for (size_t k = 0; k < validItems.size(); ++k)
+        {
+            const auto& item = validItems[k];
+            const auto& cnt = contours[item.Index];
+
+            // 1. 绘制轮廓线 (亮绿)
+            cv::drawContours(output, contours, static_cast<int>(item.Index), cv::Scalar(0, 255, 128), 2);
+
+            // 2. 绘制外接几何
+            if (drawType == 1 || drawType == 5) // 正矩形
             {
-                cv::Rect r = cv::boundingRect(contours[i]);
-                cv::rectangle(output, r, cv::Scalar(0, 0, 255), 2);
+                cv::rectangle(output, item.BBox, cv::Scalar(0, 140, 255), 2);
             }
-            else if (drawType == 2) // 旋转矩形
+            if (drawType == 2 || drawType == 5) // 旋转矩形
             {
-                cv::RotatedRect r = cv::minAreaRect(contours[i]);
+                cv::RotatedRect r = cv::minAreaRect(cnt);
                 cv::Point2f pts[4];
                 r.points(pts);
                 for (int j = 0; j < 4; ++j)
@@ -125,19 +236,37 @@ bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
                     cv::line(output, pts[j], pts[(j + 1) % 4], cv::Scalar(255, 255, 0), 2);
                 }
             }
-            else if (drawType == 3) // 外接圆
+            if (drawType == 3) // 最小外接圆
             {
                 cv::Point2f center;
                 float radius;
-                cv::minEnclosingCircle(contours[i], center, radius);
+                cv::minEnclosingCircle(cnt, center, radius);
                 cv::circle(output, center, static_cast<int>(radius), cv::Scalar(255, 0, 255), 2);
             }
-            else if (drawType == 4) // 凸包
+            if (drawType == 4) // 凸包
             {
                 std::vector<cv::Point> hull;
-                cv::convexHull(contours[i], hull);
+                cv::convexHull(cnt, hull);
                 std::vector<std::vector<cv::Point>> hulls = { hull };
                 cv::drawContours(output, hulls, 0, cv::Scalar(0, 255, 255), 2);
+            }
+
+            // 3. 绘制质心与文本标注
+            cv::Moments m = cv::moments(cnt);
+            cv::Point centroid(item.BBox.x + item.BBox.width / 2, item.BBox.y + item.BBox.height / 2);
+            if (m.m00 > 1e-4)
+            {
+                centroid = cv::Point(static_cast<int>(m.m10 / m.m00), static_cast<int>(m.m01 / m.m00));
+            }
+
+            cv::drawMarker(output, centroid, cv::Scalar(0, 0, 255), cv::MARKER_CROSS, 12, 2);
+
+            if (showLabels)
+            {
+                std::stringstream ss;
+                ss << "#" << (k + 1) << " S:" << static_cast<int>(item.Area) << " " << item.BBox.width << "x" << item.BBox.height;
+                cv::putText(output, ss.str(), cv::Point(item.BBox.x, std::max(16, item.BBox.y - 6)),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.48, cv::Scalar(0, 255, 255), 1, cv::LINE_AA);
             }
         }
         return true;
@@ -152,51 +281,67 @@ bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string&
 std::string FindContoursOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     int modeIdx = _params[0].GetInt();
-    int methodIdx = _params[1].GetInt();
+    int filterStrategy = _params[1].GetInt();
     double minArea = _params[2].GetDouble();
-    int drawType = _params[3].GetInt();
+    double maxArea = _params[3].GetDouble();
+    int minWidth = _params[4].GetInt();
+    int minHeight = _params[5].GetInt();
+    int drawType = _params[6].GetInt();
+    bool showLabels = _params[7].GetBool();
 
     std::string modeStr = (modeIdx == 1 ? "cv::RETR_LIST" : (modeIdx == 2 ? "cv::RETR_CCOMP" : (modeIdx == 3 ? "cv::RETR_TREE" : "cv::RETR_EXTERNAL")));
-    std::string methodStr = (methodIdx == 0 ? "cv::CHAIN_APPROX_NONE" : "cv::CHAIN_APPROX_SIMPLE");
 
     std::stringstream ss;
-    ss << "// 轮廓查找与几何分析参数配置\n"
+    ss << "// 轮廓查找与多维度特征筛选参数配置\n"
        << "int contourMode = " << modeStr << ";\n"
-       << "int contourMethod = " << methodStr << ";\n"
-       << "double minAreaThreshold = " << minArea << "; // 最小面积过滤门限 (px²)\n"
+       << "double minArea = " << minArea << ";         // 最小面积阈值\n"
+       << "double maxArea = " << maxArea << ";         // 最大面积阈值 (0为不限)\n"
+       << "int minW = " << minWidth << ";               // 最小宽度阈值\n"
+       << "int minH = " << minHeight << ";               // 最小高度阈值\n"
        << "std::vector<std::vector<cv::Point>> contours;\n"
        << "std::vector<cv::Vec4i> hierarchy;\n"
-       << "cv::findContours(" << inVar << ", contours, hierarchy, contourMode, contourMethod);\n"
+       << "cv::findContours(" << inVar << ", contours, hierarchy, contourMode, cv::CHAIN_APPROX_SIMPLE);\n"
        << "cv::cvtColor(" << inVar << ", " << outVar << ", cv::COLOR_GRAY2BGR);\n"
-       << "for (size_t i = 0; i < contours.size(); ++i) {\n"
-       << "    if (cv::contourArea(contours[i]) < minAreaThreshold) continue;\n";
-    if (drawType == 0)
+       << "std::vector<std::vector<cv::Point>> filteredContours;\n"
+       << "for (const auto& cnt : contours) {\n"
+       << "    double area = cv::contourArea(cnt);\n"
+       << "    if (area < minArea) continue;\n"
+       << "    if (maxArea > 0 && area > maxArea) continue;\n"
+       << "    cv::Rect bbox = cv::boundingRect(cnt);\n"
+       << "    if (minW > 0 && bbox.width < minW) continue;\n"
+       << "    if (minH > 0 && bbox.height < minH) continue;\n"
+       << "    filteredContours.push_back(cnt);\n"
+       << "}\n";
+
+    if (filterStrategy == 1)
     {
-        ss << "    cv::drawContours(" << outVar << ", contours, (int)i, cv::Scalar(0, 255, 0), 2);\n";
+        ss << "// 仅保留最大面积轮廓\n"
+           << "if (!filteredContours.empty()) {\n"
+           << "    auto maxIt = std::max_element(filteredContours.begin(), filteredContours.end(), [](const auto& a, const auto& b) {\n"
+           << "        return cv::contourArea(a) < cv::contourArea(b);\n"
+           << "    });\n"
+           << "    filteredContours = { *maxIt };\n"
+           << "}\n";
     }
-    else if (drawType == 1)
+
+    ss << "// 绘制筛选出的特征轮廓与几何标注\n"
+       << "for (size_t i = 0; i < filteredContours.size(); ++i) {\n"
+       << "    cv::drawContours(" << outVar << ", filteredContours, (int)i, cv::Scalar(0, 255, 128), 2);\n"
+       << "    cv::Rect r = cv::boundingRect(filteredContours[i]);\n";
+    if (drawType == 1 || drawType == 5)
     {
-        ss << "    cv::Rect r = cv::boundingRect(contours[i]);\n"
-           << "    cv::rectangle(" << outVar << ", r, cv::Scalar(0, 0, 255), 2);\n";
+        ss << "    cv::rectangle(" << outVar << ", r, cv::Scalar(0, 140, 255), 2);\n";
     }
-    else if (drawType == 2)
+    if (drawType == 2 || drawType == 5)
     {
-        ss << "    cv::RotatedRect r = cv::minAreaRect(contours[i]);\n"
-           << "    cv::Point2f pts[4]; r.points(pts);\n"
+        ss << "    cv::RotatedRect rot = cv::minAreaRect(filteredContours[i]);\n"
+           << "    cv::Point2f pts[4]; rot.points(pts);\n"
            << "    for (int j = 0; j < 4; ++j) cv::line(" << outVar << ", pts[j], pts[(j+1)%4], cv::Scalar(255, 255, 0), 2);\n";
     }
-    else if (drawType == 3)
+    if (showLabels)
     {
-        ss << "    cv::Point2f center; float radius;\n"
-           << "    cv::minEnclosingCircle(contours[i], center, radius);\n"
-           << "    cv::circle(" << outVar << ", center, (int)radius, cv::Scalar(255, 0, 255), 2);\n";
-    }
-    else
-    {
-        ss << "    std::vector<cv::Point> hull;\n"
-           << "    cv::convexHull(contours[i], hull);\n"
-           << "    std::vector<std::vector<cv::Point>> hulls = { hull };\n"
-           << "    cv::drawContours(" << outVar << ", hulls, 0, cv::Scalar(0, 255, 255), 2);\n";
+        ss << "    cv::putText(" << outVar << ", \"#\" + std::to_string(i+1) + \" Area:\" + std::to_string((int)cv::contourArea(filteredContours[i])),\n"
+           << "                cv::Point(r.x, std::max(16, r.y - 5)), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1);\n";
     }
     ss << "}";
     return ss.str();
@@ -205,47 +350,58 @@ std::string FindContoursOp::GenerateCppCode(const std::string& inVar, const std:
 std::string FindContoursOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
     int modeIdx = _params[0].GetInt();
-    int methodIdx = _params[1].GetInt();
+    int filterStrategy = _params[1].GetInt();
     double minArea = _params[2].GetDouble();
-    int drawType = _params[3].GetInt();
+    double maxArea = _params[3].GetDouble();
+    int minWidth = _params[4].GetInt();
+    int minHeight = _params[5].GetInt();
+    int drawType = _params[6].GetInt();
+    bool showLabels = _params[7].GetBool();
 
     std::string modeStr = (modeIdx == 1 ? "cv2.RETR_LIST" : (modeIdx == 2 ? "cv2.RETR_CCOMP" : (modeIdx == 3 ? "cv2.RETR_TREE" : "cv2.RETR_EXTERNAL")));
-    std::string methodStr = (methodIdx == 0 ? "cv2.CHAIN_APPROX_NONE" : "cv2.CHAIN_APPROX_SIMPLE");
 
     std::stringstream ss;
-    ss << "# 轮廓查找与几何分析参数配置\n"
+    ss << "# 轮廓查找与多维度特征筛选参数配置\n"
        << "contour_mode = " << modeStr << "\n"
-       << "contour_method = " << methodStr << "\n"
-       << "min_area_thresh = " << minArea << "        # 最小面积过滤门限\n"
-       << "contours, hierarchy = cv2.findContours(" << inVar << ", contour_mode, contour_method)\n"
+       << "min_area = " << minArea << "               # 最小面积阈值\n"
+       << "max_area = " << maxArea << "               # 最大面积阈值\n"
+       << "min_w, min_h = " << minWidth << ", " << minHeight << "          # 最小长宽阈值\n"
+       << "contours, hierarchy = cv2.findContours(" << inVar << ", contour_mode, cv2.CHAIN_APPROX_SIMPLE)\n"
        << outVar << " = cv2.cvtColor(" << inVar << ", cv2.COLOR_GRAY2BGR) if len(" << inVar << ".shape) == 2 else " << inVar << ".copy()\n"
+       << "filtered_contours = []\n"
        << "for cnt in contours:\n"
-       << "    if cv2.contourArea(cnt) < min_area_thresh:\n"
-       << "        continue\n";
-    if (drawType == 0)
+       << "    area = cv2.contourArea(cnt)\n"
+       << "    if area < min_area or (max_area > 0 and area > max_area):\n"
+       << "        continue\n"
+       << "    x, y, w, h = cv2.boundingRect(cnt)\n"
+       << "    if (min_w > 0 and w < min_w) or (min_h > 0 and h < min_h):\n"
+       << "        continue\n"
+       << "    filtered_contours.append(cnt)\n";
+
+    if (filterStrategy == 1)
     {
-        ss << "    cv2.drawContours(" << outVar << ", [cnt], 0, (0, 255, 0), 2)\n";
+        ss << "# 仅保留最大面积轮廓\n"
+           << "if len(filtered_contours) > 0:\n"
+           << "    filtered_contours = [max(filtered_contours, key=cv2.contourArea)]\n";
     }
-    else if (drawType == 1)
+
+    ss << "for i, cnt in enumerate(filtered_contours):\n"
+       << "    cv2.drawContours(" << outVar << ", [cnt], 0, (0, 255, 128), 2)\n"
+       << "    x, y, w, h = cv2.boundingRect(cnt)\n";
+    if (drawType == 1 || drawType == 5)
     {
-        ss << "    x, y, w, h = cv2.boundingRect(cnt)\n"
-           << "    cv2.rectangle(" << outVar << ", (x, y), (x + w, y + h), (0, 0, 255), 2)\n";
+        ss << "    cv2.rectangle(" << outVar << ", (x, y), (x + w, y + h), (0, 140, 255), 2)\n";
     }
-    else if (drawType == 2)
+    if (drawType == 2 || drawType == 5)
     {
         ss << "    rect = cv2.minAreaRect(cnt)\n"
            << "    box = np.int0(cv2.boxPoints(rect))\n"
            << "    cv2.drawContours(" << outVar << ", [box], 0, (255, 255, 0), 2)\n";
     }
-    else if (drawType == 3)
+    if (showLabels)
     {
-        ss << "    (x, y), radius = cv2.minEnclosingCircle(cnt)\n"
-           << "    cv2.circle(" << outVar << ", (int(x), int(y)), int(radius), (255, 0, 255), 2)\n";
-    }
-    else
-    {
-        ss << "    hull = cv2.convexHull(cnt)\n"
-           << "    cv2.drawContours(" << outVar << ", [hull], 0, (0, 255, 255), 2)\n";
+        ss << "    cv2.putText(" << outVar << ", f'#{i+1} Area:{int(cv2.contourArea(cnt))} {w}x{h}',\n"
+           << "                (x, max(16, y - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)\n";
     }
     return ss.str();
 }
