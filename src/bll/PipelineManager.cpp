@@ -2,6 +2,7 @@
 #include "../utils/Logger.h"
 #include "../core/PipelineContext.h"
 #include <chrono>
+#include <exception>
 
 PipelineManager::PipelineManager(QObject* parent)
     : QObject(parent)
@@ -170,7 +171,23 @@ bool PipelineManager::Execute(bool forceAll)
         auto stepStart = std::chrono::high_resolution_clock::now();
         cv::Mat output;
         std::string errMsg;
-        bool ok = currentStep->GetOpNode()->Process(prevOutput, output, errMsg);
+        bool ok = false;
+        try
+        {
+            ok = currentStep->GetOpNode()->Process(prevOutput, output, errMsg);
+        }
+        catch (const cv::Exception& ex)
+        {
+            errMsg = ex.what();
+        }
+        catch (const std::exception& ex)
+        {
+            errMsg = ex.what();
+        }
+        catch (...)
+        {
+            errMsg = "算子抛出了未知异常";
+        }
         auto stepEnd = std::chrono::high_resolution_clock::now();
 
         double elapsedMs = std::chrono::duration<double, std::milli>(stepEnd - stepStart).count();
@@ -191,6 +208,14 @@ bool PipelineManager::Execute(bool forceAll)
             allSuccess = false;
             Logger::Warn("PipelineManager", "步骤 " + std::to_string(i + 1) + " 计算异常: " + errMsg);
             emit ExecutionError(static_cast<int>(i), QString::fromStdString(errMsg));
+
+            for (size_t downstreamIndex = i + 1; downstreamIndex < _steps.size(); ++downstreamIndex)
+            {
+                _steps[downstreamIndex]->SetOutputCache(cv::Mat());
+                _steps[downstreamIndex]->SetErrorMessage("因前置步骤失败而跳过");
+                _steps[downstreamIndex]->MarkDirty();
+            }
+            break;
         }
     }
 

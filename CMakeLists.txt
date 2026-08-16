@@ -16,6 +16,23 @@ set(CMAKE_AUTORCC ON)
 # ----------------------------------------------------------------------------
 # 1. 查找 Qt (自动优先匹配 Qt6，若无则自动回退至 Qt5)
 # ----------------------------------------------------------------------------
+set(VISIONSTUDIO_QT_ROOT "" CACHE PATH "Optional Qt installation root")
+set(VISIONSTUDIO_OPENCV_ROOT "" CACHE PATH "Optional OpenCV installation root")
+
+if(VISIONSTUDIO_QT_ROOT)
+    list(PREPEND CMAKE_PREFIX_PATH "${VISIONSTUDIO_QT_ROOT}")
+elseif(MINGW AND EXISTS "D:/Qt/6.8.2/mingw_64")
+    list(APPEND CMAKE_PREFIX_PATH "D:/Qt/6.8.2/mingw_64")
+elseif(MSVC AND EXISTS "D:/Qt/6.8.2/msvc2019_64")
+    list(APPEND CMAKE_PREFIX_PATH "D:/Qt/6.8.2/msvc2019_64")
+endif()
+
+if(VISIONSTUDIO_OPENCV_ROOT)
+    list(PREPEND CMAKE_PREFIX_PATH "${VISIONSTUDIO_OPENCV_ROOT}")
+elseif(EXISTS "D:/opencv4.9/build_mingw")
+    list(APPEND CMAKE_PREFIX_PATH "D:/opencv4.9/build_mingw")
+endif()
+
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Core Gui)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Core Gui)
 
@@ -24,20 +41,6 @@ message(STATUS "Found Qt Version: ${QT_VERSION} (Qt${QT_VERSION_MAJOR})")
 # ----------------------------------------------------------------------------
 # 2. 查找 OpenCV (多 IDE 智能自动探测)
 # ----------------------------------------------------------------------------
-if(MINGW)
-    list(APPEND CMAKE_PREFIX_PATH
-        "D:/Qt/6.8.2/mingw_64"
-        "D:/Qt/5.14.2/mingw73_64"
-        "D:/opencv4.9/build_mingw"
-    )
-else()
-    list(APPEND CMAKE_PREFIX_PATH
-        "D:/Qt/6.8.2/msvc2019_64"
-        "D:/Qt/5.14.2/msvc2017_64"
-        "D:/opencv4.9/opencv/build"
-    )
-endif()
-
 find_package(OpenCV QUIET)
 
 if(NOT OpenCV_FOUND)
@@ -94,6 +97,7 @@ set(CORE_SOURCES
     src/core/operators/InteractiveMaskOp.cpp
     src/core/operators/AdvancedOps.cpp
     src/core/operators/IndustrialOps.cpp
+    src/core/operators/GeneralOps.cpp
 )
 
 set(BLL_SOURCES
@@ -111,6 +115,7 @@ set(UTILS_SOURCES
     src/utils/Logger.cpp
     src/utils/MatUtils.cpp
     src/utils/IconUtils.cpp
+    src/utils/ImageIoUtils.cpp
 )
 
 set(UI_SOURCES
@@ -194,6 +199,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     dwmapi
 )
 
+# QR/Barcode 解码属于 OpenCV objdetect，可在精简 OpenCV 构建中缺失。
+if(TARGET opencv_objdetect)
+    target_link_libraries(${PROJECT_NAME} PRIVATE opencv_objdetect)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VISIONSTUDIO_HAS_OPENCV_OBJDETECT=1)
+    message(STATUS "OpenCV objdetect enabled: QR/Barcode decoding is available")
+else()
+    message(WARNING "OpenCV objdetect is unavailable; QR/Barcode decoding will report a clear dependency error")
+endif()
+
 # 编译器选项适配
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /MP /utf-8 /Zc:__cplusplus /permissive-)
@@ -255,15 +269,54 @@ if(WIN32 AND MINGW)
     endif()
 endif()
 
-# Deploy portable packaging scripts to target binary directory
+# Keep portable packaging scripts synchronized with every CMake configure.
+# A POST_BUILD copy only runs when the executable is relinked, leaving stale
+# scripts behind after a script-only change.
 if(WIN32)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_portable.bat"
-            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_portable.ps1"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-        COMMENT "Deploying portable package scripts to executable directory"
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_portable.bat"
+        "${CMAKE_CURRENT_BINARY_DIR}/package_portable.bat"
+        COPYONLY
+    )
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_portable.ps1"
+        "${CMAKE_CURRENT_BINARY_DIR}/package_portable.ps1"
+        COPYONLY
     )
 endif()
 
 message(STATUS "Configured ${PROJECT_NAME} successfully.")
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(VisionStudio_CoreTests
+        tests/CoreTests.cpp
+        ${CORE_SOURCES}
+        ${BLL_SOURCES}
+        ${CODEGEN_SOURCES}
+        src/utils/Logger.cpp
+        src/utils/ImageIoUtils.cpp
+    )
+    target_include_directories(VisionStudio_CoreTests PRIVATE
+        src
+        src/core
+        src/bll
+        src/codegen
+        src/utils
+        ${OpenCV_INCLUDE_DIRS}
+    )
+    target_link_libraries(VisionStudio_CoreTests PRIVATE
+        Qt${QT_VERSION_MAJOR}::Core
+        ${OpenCV_LIBS}
+    )
+    if(TARGET opencv_objdetect)
+        target_link_libraries(VisionStudio_CoreTests PRIVATE opencv_objdetect)
+        target_compile_definitions(VisionStudio_CoreTests PRIVATE VISIONSTUDIO_HAS_OPENCV_OBJDETECT=1)
+    endif()
+    if(MSVC)
+        target_compile_options(VisionStudio_CoreTests PRIVATE /utf-8 /Zc:__cplusplus /permissive-)
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        target_compile_options(VisionStudio_CoreTests PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    endif()
+    add_test(NAME VisionStudio_CoreTests COMMAND VisionStudio_CoreTests)
+endif()

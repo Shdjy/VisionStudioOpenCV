@@ -5,6 +5,7 @@
 #include <vector>
 #include <variant>
 #include <memory>
+#include <cstdint>
 #include "OpCategory.h"
 
 /**
@@ -76,6 +77,19 @@ struct OpParameter
 };
 
 /**
+ * @brief 算子输出的通用结构化结果项
+ *
+ * 用于承载统计值、几何测量值和解码文本等纯 OpenCV 结果，避免只能把结果绘制到图像上。
+ */
+struct OpResultItem
+{
+    std::string Name;
+    std::string DisplayName;
+    std::variant<std::int64_t, double, bool, std::string> Value;
+    std::string Unit;
+};
+
+/**
  * @brief 机器视觉算子抽象基类接口
  * 
  * 所有具体的图像处理算法（滤波、二值化、边缘、几何变换等）均继承自此类。
@@ -140,6 +154,11 @@ public:
     virtual OpParameter* FindParameter(const std::string& name);
 
     /**
+     * @brief 获取最近一次执行产生的结构化结果
+     */
+    const std::vector<OpResultItem>& GetResults() const { return _results; }
+
+    /**
      * @brief 生成规范的 C++ (OpenCV) 代码段
      * @param inVar 输入图像变量名 (如 "img_0")
      * @param outVar 输出图像变量名 (如 "img_1")
@@ -159,4 +178,14 @@ public:
      * @brief 复制克隆一个独立的算子节点实例
      */
     virtual std::unique_ptr<IOpNode> Clone() const = 0;
+
+protected:
+    void ClearResults() { _results.clear(); }
+    void AddResult(const std::string& name,
+                   const std::string& displayName,
+                   const std::variant<std::int64_t, double, bool, std::string>& value,
+                   const std::string& unit = "");
+
+private:
+    std::vector<OpResultItem> _results;
 };

@@ -8,6 +8,7 @@
 #include "../core/OpRegistry.h"
 #include "../bll/ProjectManager.h"
 #include "../utils/Logger.h"
+#include "../utils/ImageIoUtils.h"
 #include "../utils/IconUtils.h"
 #include <QFileDialog>
 #include <QMessageBox>
@@ -368,11 +369,12 @@ void MainWindow::OnOpenImage()
         return;
     }
 
-    cv::Mat img = cv::imread(filePath.toLocal8Bit().toStdString());
+    std::string ioError;
+    cv::Mat img = ImageIoUtils::ReadImage(filePath.toUtf8().constData(), cv::IMREAD_COLOR, ioError);
     if (img.empty())
     {
         QMessageBox::critical(this, "打开失败", "无法读取该图像文件: " + filePath);
-        Logger::Error("MainWindow", "读取图像失败: " + filePath.toStdString());
+        Logger::Error("MainWindow", "读取图像失败: " + ioError);
         return;
     }
 
@@ -400,7 +402,8 @@ void MainWindow::OnSaveImage()
         return;
     }
 
-    if (cv::imwrite(filePath.toLocal8Bit().toStdString(), outputMat))
+    std::string ioError;
+    if (ImageIoUtils::WriteImage(filePath.toUtf8().constData(), outputMat, ioError))
     {
         QMessageBox::information(this, "保存成功", "图像已成功保存至:\n" + filePath);
         Logger::Info("MainWindow", "图像已保存: " + filePath.toStdString());
@@ -408,7 +411,7 @@ void MainWindow::OnSaveImage()
     else
     {
         QMessageBox::critical(this, "保存失败", "无法写入图像文件！");
-        Logger::Error("MainWindow", "写入图像文件失败: " + filePath.toStdString());
+        Logger::Error("MainWindow", "写入图像文件失败: " + ioError);
     }
 }
 

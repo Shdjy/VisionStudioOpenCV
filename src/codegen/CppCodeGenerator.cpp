@@ -13,6 +13,10 @@ std::string CppCodeGenerator::Generate(const PipelineManager& pipeline, const st
        << "#include <opencv2/opencv.hpp>\n"
        << "#include <iostream>\n"
        << "#include <vector>\n"
+       << "#include <algorithm>\n"
+       << "#include <cmath>\n"
+       << "#include <sstream>\n"
+       << "#include <random>\n"
        << "#include <chrono>\n\n"
        << "int main(int argc, char** argv)\n"
        << "{\n"
@@ -31,6 +35,7 @@ std::string CppCodeGenerator::Generate(const PipelineManager& pipeline, const st
        << "    std::cout << \"[Info] 图像加载成功，尺寸: \" << src.cols << \"x\" << src.rows << \" 通道: \" << src.channels() << std::endl;\n\n"
        << "    // 2. 初始化流水线变量与计时\n"
        << "    auto startTime = std::chrono::high_resolution_clock::now();\n\n"
+       << "    cv::Mat source_image = src.clone();\n"
        << "    cv::Mat current = src.clone();\n\n";
 
     int activeStepCount = 0;

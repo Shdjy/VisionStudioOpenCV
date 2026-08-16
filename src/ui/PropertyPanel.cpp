@@ -18,6 +18,20 @@ PropertyPanel::PropertyPanel(QWidget* parent)
     , ui(new Ui::PropertyPanel)
 {
     ui->setupUi(this);
+
+    _executionDebounceTimer = new QTimer(this);
+    _executionDebounceTimer->setSingleShot(true);
+    _executionDebounceTimer->setInterval(150);
+    connect(_executionDebounceTimer, &QTimer::timeout, this, [this]() {
+        if (_pipelineMgr && _pendingStepIndex >= 0)
+        {
+            const int stepIndex = _pendingStepIndex;
+            _pendingStepIndex = -1;
+            _pipelineMgr->MarkDirtyFrom(stepIndex);
+            _pipelineMgr->Execute();
+            emit ParameterChanged(stepIndex);
+        }
+    });
 }
 
 PropertyPanel::~PropertyPanel()
@@ -39,6 +53,12 @@ bool PropertyPanel::eventFilter(QObject* watched, QEvent* event)
 void PropertyPanel::SetPipelineManager(PipelineManager* pipelineMgr)
 {
     _pipelineMgr = pipelineMgr;
+}
+
+void PropertyPanel::ScheduleExecution(int stepIndex)
+{
+    _pendingStepIndex = stepIndex;
+    _executionDebounceTimer->start();
 }
 
 void PropertyPanel::SetCurrentStep(int stepIndex)
@@ -185,9 +205,7 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
                         if (s && s->GetOpNode())
                         {
                             s->GetOpNode()->SetParameter(paramName, val);
-                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                            _pipelineMgr->Execute();
-                            emit ParameterChanged(_currentStepIndex);
+                            ScheduleExecution(_currentStepIndex);
                         }
                     }
                 });
@@ -244,9 +262,7 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
                         if (s && s->GetOpNode())
                         {
                             s->GetOpNode()->SetParameter(paramName, val);
-                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                            _pipelineMgr->Execute();
-                            emit ParameterChanged(_currentStepIndex);
+                            ScheduleExecution(_currentStepIndex);
                         }
                     }
                 });
@@ -278,9 +294,7 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
                         if (s && s->GetOpNode())
                         {
                             s->GetOpNode()->SetParameter(paramName, idx);
-                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                            _pipelineMgr->Execute();
-                            emit ParameterChanged(_currentStepIndex);
+                            ScheduleExecution(_currentStepIndex);
                         }
                     }
                 });
@@ -303,9 +317,7 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
                         if (s && s->GetOpNode())
                         {
                             s->GetOpNode()->SetParameter(paramName, checked);
-                            _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                            _pipelineMgr->Execute();
-                            emit ParameterChanged(_currentStepIndex);
+                            ScheduleExecution(_currentStepIndex);
                         }
                     }
                 });
@@ -343,9 +355,7 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
                             if (s && s->GetOpNode())
                             {
                                 s->GetOpNode()->SetParameter(paramName, filePath.toStdString());
-                                _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
-                                _pipelineMgr->Execute();
-                                emit ParameterChanged(_currentStepIndex);
+                                ScheduleExecution(_currentStepIndex);
                             }
                         }
                     }

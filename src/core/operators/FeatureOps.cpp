@@ -1,7 +1,43 @@
 #include "FeatureOps.h"
 #include "../PipelineContext.h"
+#include "../../utils/ImageIoUtils.h"
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
+
+namespace
+{
+std::string EscapeCppString(const std::string& value)
+{
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (char ch : value)
+    {
+        if (ch == '\\' || ch == '"')
+        {
+            escaped.push_back('\\');
+        }
+        escaped.push_back(ch);
+    }
+    return escaped;
+}
+
+std::string EscapePythonString(std::string value)
+{
+    std::replace(value.begin(), value.end(), '\\', '/');
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (char ch : value)
+    {
+        if (ch == '\'')
+        {
+            escaped.push_back('\\');
+        }
+        escaped.push_back(ch);
+    }
+    return escaped;
+}
+}
 
 // ---------------- CornerHarrisOp ----------------
 CornerHarrisOp::CornerHarrisOp()
@@ -401,7 +437,12 @@ void MatchTemplateOp::SetTemplateRoi(int x, int y, int w, int h)
 
 bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    ClearResults();
+    if (input.empty())
+    {
+        errorMsg = "输入图像为空";
+        return false;
+    }
 
     int methodIdx = _params[0].GetInt();
     int tplSrc = _params[1].GetInt();
@@ -413,12 +454,17 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
     double scoreThresh = _params[7].GetDouble();
     bool multiMatch = _params[8].GetBool();
 
-    int cvMethod = cv::TM_CCOEFF_NORMED;
-    if (methodIdx == 0) cvMethod = cv::TM_SQDIFF;
-    else if (methodIdx == 1) cvMethod = cv::TM_SQDIFF_NORMED;
-    else if (methodIdx == 2) cvMethod = cv::TM_CCORR;
-    else if (methodIdx == 3) cvMethod = cv::TM_CCORR_NORMED;
-    else if (methodIdx == 4) cvMethod = cv::TM_CCOEFF;
+    const int methods[] = {
+        cv::TM_SQDIFF,
+        cv::TM_SQDIFF_NORMED,
+        cv::TM_CCORR,
+        cv::TM_CCORR_NORMED,
+        cv::TM_CCOEFF,
+        cv::TM_CCOEFF_NORMED
+    };
+    const int cvMethod = methods[methodIdx];
+    const bool isSqDiff = methodIdx <= 1;
+    const bool isNormalizedMethod = methodIdx == 1 || methodIdx == 3 || methodIdx == 5;
 
     cv::Mat tpl;
     cv::Rect tplRoi(0, 0, 0, 0);
@@ -428,16 +474,15 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
         // 加载本地外部模板文件
         if (tplPath.empty())
         {
-            output = input.clone();
-            cv::putText(output, "Please select a local template image file in Property Panel", cv::Point(20, 40),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 165, 255), 2);
-            return true;
+            errorMsg = "请选择本地模板图像文件";
+            return false;
         }
 
-        tpl = cv::imread(tplPath, cv::IMREAD_COLOR);
+        std::string imageIoError;
+        tpl = ImageIoUtils::ReadImage(tplPath, cv::IMREAD_COLOR, imageIoError);
         if (tpl.empty())
         {
-            errorMsg = "无法读取指定的本地模板图像文件: " + tplPath;
+            errorMsg = "无法读取指定的本地模板图像文件: " + imageIoError;
             output = input.clone();
             return false;
         }
@@ -454,6 +499,11 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
             if (!orig.empty()) baseImg = orig;
         }
 
+        if (baseImg.cols < 10 || baseImg.rows < 10)
+        {
+            errorMsg = "参考图像尺寸过小，无法提取模板";
+            return false;
+        }
         rx = std::max(0, std::min(rx, baseImg.cols - 10));
         ry = std::max(0, std::min(ry, baseImg.rows - 10));
         rw = std::max(10, std::min(rw, baseImg.cols - rx));
@@ -474,17 +524,47 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
     {
         // 灰度化匹配提升效率与稳定性
         cv::Mat grayInput, grayTpl;
-        if (input.channels() > 1) cv::cvtColor(input, grayInput, cv::COLOR_BGR2GRAY);
-        else grayInput = input;
+        if (input.channels() == 4)
+        {
+            cv::cvtColor(input, grayInput, cv::COLOR_BGRA2GRAY);
+        }
+        else if (input.channels() > 1)
+        {
+            cv::cvtColor(input, grayInput, cv::COLOR_BGR2GRAY);
+        }
+        else
+        {
+            grayInput = input;
+        }
 
-        if (tpl.channels() > 1) cv::cvtColor(tpl, grayTpl, cv::COLOR_BGR2GRAY);
-        else grayTpl = tpl;
+        if (tpl.channels() == 4)
+        {
+            cv::cvtColor(tpl, grayTpl, cv::COLOR_BGRA2GRAY);
+        }
+        else if (tpl.channels() > 1)
+        {
+            cv::cvtColor(tpl, grayTpl, cv::COLOR_BGR2GRAY);
+        }
+        else
+        {
+            grayTpl = tpl;
+        }
 
         cv::Mat result;
         cv::matchTemplate(grayInput, grayTpl, result, cvMethod);
 
-        if (input.channels() == 1) cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
-        else output = input.clone();
+        if (input.channels() == 1)
+        {
+            cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
+        }
+        else if (input.channels() == 4)
+        {
+            cv::cvtColor(input, output, cv::COLOR_BGRA2BGR);
+        }
+        else
+        {
+            output = input.clone();
+        }
 
         // 若是框选模式，绘制洋红色参考框
         if (tplSrc != 2 && tplRoi.width > 0)
@@ -499,17 +579,24 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
             cv::Point minLoc, maxLoc;
             cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc);
 
-            bool isSqDiff = (cvMethod == cv::TM_SQDIFF || cvMethod == cv::TM_SQDIFF_NORMED);
             cv::Point matchLoc = isSqDiff ? minLoc : maxLoc;
-            double matchScore = isSqDiff ? (1.0 - minVal) : maxVal;
+            double matchScore = isSqDiff ? minVal : maxVal;
+            double similarity = isSqDiff ? 1.0 - minVal : maxVal;
+            const bool accepted = !isNormalizedMethod || similarity >= scoreThresh;
+            AddResult("match.rawScore", "模板匹配原始得分", matchScore);
+            AddResult("match.similarity", "模板匹配相似度", isNormalizedMethod ? similarity : matchScore);
+            AddResult("match.x", "匹配位置 X", static_cast<std::int64_t>(matchLoc.x), "px");
+            AddResult("match.y", "匹配位置 Y", static_cast<std::int64_t>(matchLoc.y), "px");
 
-            if (matchScore >= scoreThresh || isSqDiff)
+            if (accepted)
             {
                 cv::Rect matchRect(matchLoc.x, matchLoc.y, rw, rh);
                 cv::rectangle(output, matchRect, cv::Scalar(0, 255, 0), 2, cv::LINE_AA);
 
                 std::stringstream ss;
-                ss << "Match: " << std::fixed << std::setprecision(2) << matchScore << " (" << matchLoc.x << "," << matchLoc.y << ")";
+                ss << "Match: " << std::fixed << std::setprecision(4)
+                   << (isNormalizedMethod ? similarity : matchScore)
+                   << " (" << matchLoc.x << "," << matchLoc.y << ")";
                 cv::putText(output, ss.str(), cv::Point(matchLoc.x, std::max(16, matchLoc.y - 6)),
                             cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 255), 1, cv::LINE_AA);
             }
@@ -517,22 +604,47 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
         else
         {
             // 多目标阈值匹配
-            int matchCount = 0;
-            for (int r = 0; r < result.rows; ++r)
+            cv::Mat similarityMap;
+            if (isNormalizedMethod)
             {
-                for (int c = 0; c < result.cols; ++c)
+                similarityMap = isSqDiff ? (1.0f - result) : result.clone();
+            }
+            else
+            {
+                cv::normalize(result, similarityMap, 0.0, 1.0, cv::NORM_MINMAX);
+                if (isSqDiff)
                 {
-                    float val = result.at<float>(r, c);
-                    if (val >= scoreThresh)
-                    {
-                        cv::rectangle(output, cv::Rect(c, r, rw, rh), cv::Scalar(0, 165, 255), 2);
-                        matchCount++;
-                    }
+                    similarityMap = 1.0f - similarityMap;
                 }
             }
 
+            cv::Mat suppressedScores = similarityMap.clone();
+            const int suppressionRadiusX = std::max(1, rw / 2);
+            const int suppressionRadiusY = std::max(1, rh / 2);
+            int matchCount = 0;
+            while (matchCount < 200)
+            {
+                double peakScore = 0.0;
+                cv::Point location;
+                cv::minMaxLoc(suppressedScores, nullptr, &peakScore, nullptr, &location);
+                if (peakScore < scoreThresh)
+                {
+                    break;
+                }
+
+                cv::rectangle(output, cv::Rect(location.x, location.y, rw, rh), cv::Scalar(0, 165, 255), 2);
+                ++matchCount;
+
+                const int left = std::max(0, location.x - suppressionRadiusX);
+                const int top = std::max(0, location.y - suppressionRadiusY);
+                const int right = std::min(suppressedScores.cols, location.x + suppressionRadiusX + 1);
+                const int bottom = std::min(suppressedScores.rows, location.y + suppressionRadiusY + 1);
+                suppressedScores(cv::Rect(left, top, right - left, bottom - top)).setTo(-1.0f);
+            }
+            AddResult("match.count", "多目标匹配数量", static_cast<std::int64_t>(matchCount));
+
             std::stringstream ss;
-            ss << "Found " << matchCount << " target candidates";
+            ss << "Found " << matchCount << " matches";
             cv::putText(output, ss.str(), cv::Point(20, 30), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
         }
 
@@ -555,33 +667,80 @@ std::string MatchTemplateOp::GenerateCppCode(const std::string& inVar, const std
     int rw = _params[5].GetInt();
     int rh = _params[6].GetInt();
     double scoreThresh = _params[7].GetDouble();
+    bool multiMatch = _params[8].GetBool();
 
-    std::string methodStr = (methodIdx == 5 ? "cv::TM_CCOEFF_NORMED" : (methodIdx == 1 ? "cv::TM_SQDIFF_NORMED" : "cv::TM_CCOEFF"));
+    const char* methods[] = {
+        "cv::TM_SQDIFF", "cv::TM_SQDIFF_NORMED", "cv::TM_CCORR",
+        "cv::TM_CCORR_NORMED", "cv::TM_CCOEFF", "cv::TM_CCOEFF_NORMED"
+    };
+    const std::string methodStr = methods[methodIdx];
+    const bool isSqDiff = methodIdx <= 1;
+    const bool isNormalizedMethod = methodIdx == 1 || methodIdx == 3 || methodIdx == 5;
 
     std::stringstream ss;
     ss << "// 模板匹配与目标定位\n";
     if (tplSrc == 2 && !tplPath.empty())
     {
-        ss << "cv::Mat templateImg = cv::imread(\"" << tplPath << "\");\n";
+        ss << "cv::Mat templateImg = cv::imread(\"" << EscapeCppString(tplPath) << "\");\n";
     }
     else
     {
-        ss << "cv::Rect tplRoi(" << rx << ", " << ry << ", " << rw << ", " << rh << ");\n"
-           << "cv::Mat templateImg = " << inVar << "(tplRoi).clone();\n";
+        ss << "cv::Mat templateBase = " << (tplSrc == 1 ? "source_image" : inVar) << ";\n"
+           << "int templateX = std::clamp(" << rx << ", 0, templateBase.cols - 10);\n"
+           << "int templateY = std::clamp(" << ry << ", 0, templateBase.rows - 10);\n"
+           << "cv::Rect tplRoi(templateX, templateY, std::min(" << rw << ", templateBase.cols - templateX), std::min(" << rh << ", templateBase.rows - templateY));\n"
+           << "cv::Mat templateImg = templateBase(tplRoi).clone();\n";
     }
-    ss << "cv::Mat result_" << outVar << ";\n"
-       << "cv::matchTemplate(" << inVar << ", templateImg, result_" << outVar << ", " << methodStr << ");\n"
+    ss << "cv::Mat matchGray, templateGray;\n"
+       << "if (" << inVar << ".channels() == 1) matchGray = " << inVar << "; else cv::cvtColor(" << inVar << ", matchGray, cv::COLOR_BGR2GRAY);\n"
+       << "if (templateImg.channels() == 1) templateGray = templateImg; else cv::cvtColor(templateImg, templateGray, cv::COLOR_BGR2GRAY);\n"
+       << "cv::Mat result_" << outVar << ";\n"
+       << "cv::matchTemplate(matchGray, templateGray, result_" << outVar << ", " << methodStr << ");\n"
        << "double minVal, maxVal; cv::Point minLoc, maxLoc;\n"
        << "cv::minMaxLoc(result_" << outVar << ", &minVal, &maxVal, &minLoc, &maxLoc);\n"
-       << outVar << " = " << inVar << ".clone();\n"
-       << "if (maxVal >= " << scoreThresh << ") {\n"
-       << "    cv::rectangle(" << outVar << ", cv::Rect(maxLoc.x, maxLoc.y, templateImg.cols, templateImg.rows), cv::Scalar(0, 255, 0), 2);\n"
-       << "}";
+       << outVar << " = " << inVar << ".clone();\n";
+    if (!multiMatch)
+    {
+        ss << "cv::Point matchLocation = " << (isSqDiff ? "minLoc" : "maxLoc") << ";\n"
+           << "double matchSimilarity = " << (isSqDiff ? "1.0 - minVal" : "maxVal") << ";\n"
+           << "if (" << (!isNormalizedMethod ? "true" : ("matchSimilarity >= " + std::to_string(scoreThresh))) << ")\n"
+           << "{\n"
+           << "    cv::rectangle(" << outVar << ", cv::Rect(matchLocation.x, matchLocation.y, templateImg.cols, templateImg.rows), cv::Scalar(0, 255, 0), 2);\n"
+           << "}";
+    }
+    else
+    {
+        ss << "cv::Mat matchSimilarityMap;\n";
+        if (isNormalizedMethod)
+        {
+            ss << "matchSimilarityMap = " << (isSqDiff ? "1.0f - result_" + outVar : "result_" + outVar + ".clone()") << ";\n";
+        }
+        else
+        {
+            ss << "cv::normalize(result_" << outVar << ", matchSimilarityMap, 0.0, 1.0, cv::NORM_MINMAX);\n";
+            if (isSqDiff)
+            {
+                ss << "matchSimilarityMap = 1.0f - matchSimilarityMap;\n";
+            }
+        }
+        ss << "cv::Mat suppressedScores = matchSimilarityMap.clone(); int matchCount = 0;\n"
+           << "while (matchCount < 200)\n"
+           << "{\n"
+           << "    double peakScore = 0.0; cv::Point location; cv::minMaxLoc(suppressedScores, nullptr, &peakScore, nullptr, &location);\n"
+           << "    if (peakScore < " << scoreThresh << ") break;\n"
+           << "    cv::rectangle(" << outVar << ", cv::Rect(location.x, location.y, templateImg.cols, templateImg.rows), cv::Scalar(0,165,255), 2); ++matchCount;\n"
+           << "    int radiusX = std::max(1, templateImg.cols / 2), radiusY = std::max(1, templateImg.rows / 2);\n"
+           << "    int left = std::max(0, location.x - radiusX), top = std::max(0, location.y - radiusY);\n"
+           << "    int right = std::min(suppressedScores.cols, location.x + radiusX + 1), bottom = std::min(suppressedScores.rows, location.y + radiusY + 1);\n"
+           << "    suppressedScores(cv::Rect(left, top, right - left, bottom - top)).setTo(-1.0f);\n"
+           << "}";
+    }
     return ss.str();
 }
 
 std::string MatchTemplateOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
+    int methodIdx = _params[0].GetInt();
     int tplSrc = _params[1].GetInt();
     std::string tplPath = _params[2].GetString();
     int rx = _params[3].GetInt();
@@ -589,22 +748,64 @@ std::string MatchTemplateOp::GeneratePythonCode(const std::string& inVar, const 
     int rw = _params[5].GetInt();
     int rh = _params[6].GetInt();
     double scoreThresh = _params[7].GetDouble();
+    bool multiMatch = _params[8].GetBool();
+    const char* methods[] = {
+        "cv2.TM_SQDIFF", "cv2.TM_SQDIFF_NORMED", "cv2.TM_CCORR",
+        "cv2.TM_CCORR_NORMED", "cv2.TM_CCOEFF", "cv2.TM_CCOEFF_NORMED"
+    };
+    const bool isSqDiff = methodIdx <= 1;
+    const bool isNormalizedMethod = methodIdx == 1 || methodIdx == 3 || methodIdx == 5;
 
     std::stringstream ss;
     ss << "# 模板匹配与目标定位\n";
     if (tplSrc == 2 && !tplPath.empty())
     {
-        ss << "template_img = cv2.imread(r'" << tplPath << "')\n";
+        ss << "template_img = cv2.imread('" << EscapePythonString(tplPath) << "')\n";
     }
     else
     {
-        ss << "template_img = " << inVar << "[" << ry << ":" << (ry + rh) << ", " << rx << ":" << (rx + rw) << "].copy()\n";
+        const std::string baseVar = tplSrc == 1 ? "source_image" : inVar;
+        ss << "template_img = " << baseVar << "[" << ry << ":" << (ry + rh) << ", " << rx << ":" << (rx + rw) << "].copy()\n";
     }
-    ss << "res = cv2.matchTemplate(" << inVar << ", template_img, cv2.TM_CCOEFF_NORMED)\n"
+    ss << "match_gray = " << inVar << " if len(" << inVar << ".shape) == 2 else cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2GRAY)\n"
+       << "template_gray = template_img if len(template_img.shape) == 2 else cv2.cvtColor(template_img, cv2.COLOR_BGR2GRAY)\n"
+       << "res = cv2.matchTemplate(match_gray, template_gray, " << methods[methodIdx] << ")\n"
        << "min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)\n"
-       << outVar << " = " << inVar << ".copy()\n"
-       << "if max_val >= " << scoreThresh << ":\n"
-       << "    cv2.rectangle(" << outVar << ", max_loc, (max_loc[0] + template_img.shape[1], max_loc[1] + template_img.shape[0]), (0, 255, 0), 2)";
+       << outVar << " = " << inVar << ".copy()\n";
+    if (!multiMatch)
+    {
+        ss << "match_location = " << (isSqDiff ? "min_loc" : "max_loc") << "\n"
+           << "match_similarity = " << (isSqDiff ? "1.0 - min_val" : "max_val") << "\n"
+           << "if " << (!isNormalizedMethod ? "True" : ("match_similarity >= " + std::to_string(scoreThresh))) << ":\n"
+           << "    cv2.rectangle(" << outVar << ", match_location, (match_location[0] + template_img.shape[1], match_location[1] + template_img.shape[0]), (0, 255, 0), 2)";
+    }
+    else
+    {
+        if (isNormalizedMethod)
+        {
+            ss << "match_similarity_map = " << (isSqDiff ? "1.0 - res" : "res.copy()") << "\n";
+        }
+        else
+        {
+            ss << "match_similarity_map = cv2.normalize(res, None, 0, 1, cv2.NORM_MINMAX)\n";
+            if (isSqDiff)
+            {
+                ss << "match_similarity_map = 1.0 - match_similarity_map\n";
+            }
+        }
+        ss << "suppressed_scores = match_similarity_map.copy()\n"
+           << "suppression_radius_x = max(1, template_img.shape[1] // 2)\n"
+           << "suppression_radius_y = max(1, template_img.shape[0] // 2)\n"
+           << "match_count = 0\n"
+           << "while match_count < 200:\n"
+           << "    _, peak_score, _, location = cv2.minMaxLoc(suppressed_scores)\n"
+           << "    if peak_score < " << scoreThresh << ": break\n"
+           << "    cv2.rectangle(" << outVar << ", location, (location[0] + template_img.shape[1], location[1] + template_img.shape[0]), (0,165,255), 2)\n"
+           << "    match_count += 1\n"
+           << "    left, top = max(0, location[0] - suppression_radius_x), max(0, location[1] - suppression_radius_y)\n"
+           << "    right = min(suppressed_scores.shape[1], location[0] + suppression_radius_x + 1)\n"
+           << "    bottom = min(suppressed_scores.shape[0], location[1] + suppression_radius_y + 1)\n"
+           << "    suppressed_scores[top:bottom, left:right] = -1.0";
+    }
     return ss.str();
 }
-

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QTimer>
 #include "../bll/PipelineManager.h"
 
 namespace Ui {
@@ -33,7 +34,10 @@ private:
     int _currentStepIndex = -1;
     bool _isPreviewMode = false;
     std::unique_ptr<IOpNode> _previewOpNode;
+    QTimer* _executionDebounceTimer = nullptr;
+    int _pendingStepIndex = -1;
 
     void ClearDynamicWidgets();
     void BuildParamControls(IOpNode* opNode, bool isPreview = false);
+    void ScheduleExecution(int stepIndex);
 };

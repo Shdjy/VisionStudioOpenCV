@@ -13,6 +13,7 @@
 #include "operators/InteractiveMaskOp.h"
 #include "operators/AdvancedOps.h"
 #include "operators/IndustrialOps.h"
+#include "operators/GeneralOps.h"
 #include <algorithm>
 
 std::unique_ptr<IOpNode> OpRegistry::Create(const std::string& name) const
@@ -154,4 +155,14 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<SharpenOp>();
     Register<InpaintOp>();
     Register<NoiseInjectionOp>();
+
+    // 12. 通用 OpenCV 算法扩展 (General OpenCV Primitives)
+    Register<ChannelMergeOp>();
+    Register<NormalizeOp>();
+    Register<SeparableFilterOp>();
+    Register<AffineTransformOp>();
+    Register<ImageStatisticsOp>();
+    Register<HistogramCompareOp>();
+    Register<HistogramMatchOp>();
+    Register<MomentsHuOp>();
 }

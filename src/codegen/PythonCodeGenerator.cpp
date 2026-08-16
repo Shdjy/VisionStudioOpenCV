@@ -28,6 +28,8 @@ std::string PythonCodeGenerator::Generate(const PipelineManager& pipeline, const
        << "    # 2. 执行流水线处理并计时\n"
        << "    start_time = time.perf_counter()\n\n";
 
+    ss << "    source_image = src.copy()\n\n";
+
     int activeStepCount = 0;
     for (int i = 0; i < pipeline.GetStepCount(); ++i)
     {

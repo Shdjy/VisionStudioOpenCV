@@ -4,11 +4,34 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <vector>
+
+namespace
+{
+constexpr const char* ProjectVersion = "1.0";
+
+bool ApplyJsonParameter(IOpNode& op, OpParameter& parameter, const QJsonValue& value)
+{
+    switch (parameter.Type)
+    {
+        case ParamType::IntSlider:
+        case ParamType::ComboBox:
+            return value.isDouble() && op.SetParameter(parameter.Name, value.toInt());
+        case ParamType::DoubleSlider:
+            return value.isDouble() && op.SetParameter(parameter.Name, value.toDouble());
+        case ParamType::CheckBox:
+            return value.isBool() && op.SetParameter(parameter.Name, value.toBool());
+        case ParamType::FilePath:
+            return value.isString() && op.SetParameter(parameter.Name, value.toString().toStdString());
+    }
+    return false;
+}
+}
 
 bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString& filePath, QString& errorMsg)
 {
     QJsonObject rootObj;
-    rootObj["version"] = "1.0";
+    rootObj["version"] = ProjectVersion;
     rootObj["appName"] = "VisionStudio OpenCV";
 
     QJsonArray stepsArray;
@@ -40,6 +63,10 @@ bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString&
             {
                 paramsObj[QString::fromStdString(p.Name)] = p.GetBool();
             }
+            else if (p.Type == ParamType::FilePath)
+            {
+                paramsObj[QString::fromStdString(p.Name)] = QString::fromStdString(p.GetString());
+            }
         }
         stepObj["parameters"] = paramsObj;
         stepsArray.append(stepObj);
@@ -55,8 +82,15 @@ bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString&
         return false;
     }
 
-    file.write(doc.toJson(QJsonDocument::Indented));
+    const QByteArray jsonData = doc.toJson(QJsonDocument::Indented);
+    if (file.write(jsonData) != jsonData.size())
+    {
+        errorMsg = "工程文件写入不完整: " + file.errorString();
+        file.close();
+        return false;
+    }
     file.close();
+    errorMsg.clear();
     return true;
 }
 
@@ -80,13 +114,42 @@ bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& fileP
         return false;
     }
 
-    QJsonObject rootObj = doc.object();
-    QJsonArray stepsArray = rootObj["pipeline"].toArray();
-
-    pipeline.Clear();
-
-    for (const auto& val : stepsArray)
+    if (!doc.isObject())
     {
+        errorMsg = "工程文件根节点必须是 JSON 对象";
+        return false;
+    }
+
+    QJsonObject rootObj = doc.object();
+    const QString version = rootObj["version"].toString();
+    if (version != ProjectVersion)
+    {
+        errorMsg = "不支持的工程文件版本: " + version;
+        return false;
+    }
+    if (!rootObj["pipeline"].isArray())
+    {
+        errorMsg = "工程文件缺少有效的 pipeline 数组";
+        return false;
+    }
+
+    QJsonArray stepsArray = rootObj["pipeline"].toArray();
+    struct LoadedStep
+    {
+        std::unique_ptr<IOpNode> Operator;
+        bool Enabled = true;
+    };
+    std::vector<LoadedStep> loadedSteps;
+    loadedSteps.reserve(static_cast<size_t>(stepsArray.size()));
+
+    for (int stepIndex = 0; stepIndex < stepsArray.size(); ++stepIndex)
+    {
+        const QJsonValue val = stepsArray[stepIndex];
+        if (!val.isObject())
+        {
+            errorMsg = QString("第 %1 个步骤不是有效对象").arg(stepIndex + 1);
+            return false;
+        }
         QJsonObject stepObj = val.toObject();
         std::string opName = stepObj["name"].toString().toStdString();
         bool enabled = stepObj["enabled"].toBool(true);
@@ -94,7 +157,10 @@ bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& fileP
         auto op = OpRegistry::Instance().Create(opName);
         if (!op)
         {
-            continue;
+            errorMsg = QString("第 %1 个步骤引用了未知算子: %2")
+                .arg(stepIndex + 1)
+                .arg(QString::fromStdString(opName));
+            return false;
         }
 
         QJsonObject paramsObj = stepObj["parameters"].toObject();
@@ -103,29 +169,34 @@ bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& fileP
             QString pName = QString::fromStdString(p.Name);
             if (paramsObj.contains(pName))
             {
-                if (p.Type == ParamType::IntSlider || p.Type == ParamType::ComboBox)
+                if (!ApplyJsonParameter(*op, p, paramsObj[pName]))
                 {
-                    p.Value = paramsObj[pName].toInt();
-                }
-                else if (p.Type == ParamType::DoubleSlider)
-                {
-                    p.Value = paramsObj[pName].toDouble();
-                }
-                else if (p.Type == ParamType::CheckBox)
-                {
-                    p.Value = paramsObj[pName].toBool();
+                    errorMsg = QString("第 %1 个步骤的参数 %2 类型错误或超出范围")
+                        .arg(stepIndex + 1)
+                        .arg(pName);
+                    return false;
                 }
             }
         }
 
-        int stepIdx = pipeline.AddStep(std::move(op));
+        loadedSteps.push_back({ std::move(op), enabled });
+    }
+
+    pipeline.Clear();
+    for (auto& loadedStep : loadedSteps)
+    {
+        int stepIdx = pipeline.AddStep(std::move(loadedStep.Operator));
         PipelineStep* addedStep = pipeline.GetStep(stepIdx);
         if (addedStep)
         {
-            addedStep->SetEnabled(enabled);
+            addedStep->SetEnabled(loadedStep.Enabled);
         }
     }
 
-    pipeline.Execute(true);
+    if (!pipeline.GetSourceImage().empty())
+    {
+        pipeline.Execute(true);
+    }
+    errorMsg.clear();
     return true;
 }

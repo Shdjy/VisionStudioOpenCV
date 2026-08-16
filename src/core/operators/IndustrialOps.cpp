@@ -5,6 +5,14 @@
 #include <iomanip>
 #include <algorithm>
 
+#if defined(VISIONSTUDIO_HAS_OPENCV_OBJDETECT)
+#include <opencv2/objdetect.hpp>
+#if __has_include(<opencv2/objdetect/barcode.hpp>)
+#include <opencv2/objdetect/barcode.hpp>
+#define VISIONSTUDIO_HAS_OPENCV_BARCODE 1
+#endif
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -282,6 +290,7 @@ std::string RansacFitCircleOp::GetPrincipleDoc() const
 
 bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
+    ClearResults();
     if (input.empty())
     {
         errorMsg = "输入图像为空";
@@ -290,6 +299,10 @@ bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
 
     int cannyLow = _params[0].GetInt();
     int cannyHigh = _params[1].GetInt();
+    if (cannyLow > cannyHigh)
+    {
+        std::swap(cannyLow, cannyHigh);
+    }
     int minR = _params[2].GetInt();
     int maxR = _params[3].GetInt();
     int maxIters = _params[4].GetInt();
@@ -297,7 +310,11 @@ bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
     int drawMode = _params[6].GetInt();
 
     cv::Mat gray;
-    if (input.channels() == 3)
+    if (input.channels() == 4)
+    {
+        cv::cvtColor(input, gray, cv::COLOR_BGRA2GRAY);
+    }
+    else if (input.channels() == 3)
     {
         cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
     }
@@ -326,7 +343,11 @@ bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
     {
         errorMsg = "提取的边缘点过少 (<10)，请调低 Canny 阈值";
         if (input.channels() == 1) cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
+        else if (input.channels() == 4) cv::cvtColor(input, output, cv::COLOR_BGRA2BGR);
         else output = input.clone();
+        AddResult("circle.found", "是否找到圆", false);
+        AddResult("circle.edgePointCount", "边缘点数量", static_cast<std::int64_t>(edgePoints.size()));
+        errorMsg.clear();
         return true;
     }
 
@@ -382,7 +403,9 @@ bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
         }
     }
 
-    if (bestInliersCount > 5)
+    const int minimumInliers = std::max(6, static_cast<int>(std::ceil(edgePoints.size() * 0.02)));
+    const bool circleFound = bestInliersCount >= minimumInliers;
+    if (circleFound)
     {
         for (const auto& pt : edgePoints)
         {
@@ -442,12 +465,16 @@ bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
     {
         cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
     }
+    else if (input.channels() == 4)
+    {
+        cv::cvtColor(input, output, cv::COLOR_BGRA2BGR);
+    }
     else
     {
         output = input.clone();
     }
 
-    if (bestInliersCount > 0)
+    if (circleFound)
     {
         if (drawMode == 0 || drawMode == 2)
         {
@@ -478,6 +505,18 @@ bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
         }
     }
 
+    AddResult("circle.found", "是否找到圆", circleFound);
+    AddResult("circle.edgePointCount", "边缘点数量", static_cast<std::int64_t>(edgePoints.size()));
+    AddResult("circle.inlierCount", "内点数量", static_cast<std::int64_t>(bestInliersCount));
+    AddResult("circle.minimumInliers", "最小一致内点数", static_cast<std::int64_t>(minimumInliers));
+    if (circleFound)
+    {
+        AddResult("circle.centerX", "圆心 X", static_cast<double>(bestCenter.x), "px");
+        AddResult("circle.centerY", "圆心 Y", static_cast<double>(bestCenter.y), "px");
+        AddResult("circle.radius", "半径", static_cast<double>(bestRadius), "px");
+    }
+
+    errorMsg.clear();
     return true;
 }
 
@@ -490,20 +529,46 @@ std::string RansacFitCircleOp::GenerateCppCode(const std::string& inVar, const s
     int maxR = _params[3].GetInt();
     int maxIters = _params[4].GetInt();
     double inlierDist = _params[5].GetDouble();
+    int drawMode = _params[6].GetInt();
 
-    ss << "// 🎯 RANSAC 鲁棒圆拟合 (RANSAC Circle Fit)\n";
-    ss << "cv::Mat gray, edges;\n";
-    ss << "if (" << inVar << ".channels() == 3) cv::cvtColor(" << inVar << ", gray, cv::COLOR_BGR2GRAY);\n";
-    ss << "else gray = " << inVar << ".clone();\n";
-    ss << "cv::Canny(gray, edges, " << cannyLow << ", " << cannyHigh << ");\n";
-    ss << "std::vector<cv::Point2f> edgePts;\n";
-    ss << "for (int y = 0; y < edges.rows; ++y) {\n";
-    ss << "    for (int x = 0; x < edges.cols; ++x) {\n";
-    ss << "        if (edges.at<uchar>(y, x) > 0) edgePts.emplace_back((float)x, (float)y);\n";
-    ss << "    }\n";
-    ss << "}\n";
-    ss << "// 执行 RANSAC 拟合最优圆 (maxIters=" << maxIters << ", inlierDist=" << inlierDist << ", minR=" << minR << ", maxR=" << maxR << ")\n";
-    ss << "cv::cvtColor(gray, " << outVar << ", cv::COLOR_GRAY2BGR);\n";
+    if (cannyLow > cannyHigh)
+    {
+        std::swap(cannyLow, cannyHigh);
+    }
+
+    ss << "// RANSAC 鲁棒圆拟合\n"
+       << "cv::Mat ransacGray, ransacEdges;\n"
+       << "if (" << inVar << ".channels() == 1) ransacGray = " << inVar << "; else cv::cvtColor(" << inVar << ", ransacGray, cv::COLOR_BGR2GRAY);\n"
+       << "cv::Canny(ransacGray, ransacEdges, " << cannyLow << ", " << cannyHigh << ");\n"
+       << "std::vector<cv::Point2f> edgePts;\n"
+       << "for (int y = 0; y < ransacEdges.rows; ++y) for (int x = 0; x < ransacEdges.cols; ++x) if (ransacEdges.at<uchar>(y, x)) edgePts.emplace_back((float)x, (float)y);\n"
+       << "std::mt19937 ransacRng(42); cv::Point2f bestCenter; float bestRadius = 0; int bestInlierCount = 0; std::vector<cv::Point2f> bestInliers;\n"
+       << "if (edgePts.size() >= 10)\n"
+       << "{\n"
+       << "    std::uniform_int_distribution<size_t> pickPoint(0, edgePts.size() - 1);\n"
+       << "    for (int iteration = 0; iteration < " << maxIters << "; ++iteration)\n"
+       << "    {\n"
+       << "        size_t i1 = pickPoint(ransacRng), i2 = pickPoint(ransacRng), i3 = pickPoint(ransacRng); if (i1 == i2 || i2 == i3 || i1 == i3) continue;\n"
+       << "        const cv::Point2f& p1 = edgePts[i1]; const cv::Point2f& p2 = edgePts[i2]; const cv::Point2f& p3 = edgePts[i3];\n"
+       << "        float d = 2.0f * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y)); if (std::abs(d) < 1e-4f) continue;\n"
+       << "        float q1 = p1.dot(p1), q2 = p2.dot(p2), q3 = p3.dot(p3);\n"
+       << "        cv::Point2f center((q1 * (p2.y-p3.y) + q2 * (p3.y-p1.y) + q3 * (p1.y-p2.y)) / d, (q1 * (p3.x-p2.x) + q2 * (p1.x-p3.x) + q3 * (p2.x-p1.x)) / d);\n"
+       << "        float radius = cv::norm(center - p1); if (radius < " << minR << " || (" << maxR << " > 0 && radius > " << maxR << ")) continue;\n"
+       << "        int inlierCount = 0; for (const auto& point : edgePts) if (std::abs(cv::norm(point - center) - radius) <= " << inlierDist << ") ++inlierCount;\n"
+       << "        if (inlierCount > bestInlierCount) { bestInlierCount = inlierCount; bestCenter = center; bestRadius = radius; }\n"
+       << "    }\n"
+       << "    int minimumInliers = std::max(6, (int)std::ceil(edgePts.size() * 0.02));\n"
+       << "    if (bestInlierCount >= minimumInliers) for (const auto& point : edgePts) if (std::abs(cv::norm(point - bestCenter) - bestRadius) <= " << inlierDist << ") bestInliers.push_back(point);\n"
+       << "}\n"
+       << "if (" << inVar << ".channels() == 1) cv::cvtColor(" << inVar << ", " << outVar << ", cv::COLOR_GRAY2BGR); else " << outVar << " = " << inVar << ".clone();\n";
+    if (drawMode == 0 || drawMode == 2)
+    {
+        ss << "for (const auto& point : bestInliers) cv::circle(" << outVar << ", point, 1, cv::Scalar(255,200,0), -1);\n";
+    }
+    if (drawMode == 0 || drawMode == 1)
+    {
+        ss << "if (!bestInliers.empty()) { cv::circle(" << outVar << ", bestCenter, (int)bestRadius, cv::Scalar(0,255,0), 2, cv::LINE_AA); cv::drawMarker(" << outVar << ", bestCenter, cv::Scalar(0,0,255), cv::MARKER_CROSS, 16, 2); }\n";
+    }
     return ss.str();
 }
 
@@ -512,12 +577,53 @@ std::string RansacFitCircleOp::GeneratePythonCode(const std::string& inVar, cons
     std::ostringstream ss;
     int cannyLow = _params[0].GetInt();
     int cannyHigh = _params[1].GetInt();
+    int minR = _params[2].GetInt();
+    int maxR = _params[3].GetInt();
+    int maxIters = _params[4].GetInt();
+    double inlierDist = _params[5].GetDouble();
+    int drawMode = _params[6].GetInt();
 
-    ss << "# 🎯 RANSAC 鲁棒圆拟合 (RANSAC Circle Fit)\n";
-    ss << "gray = cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2GRAY) if len(" << inVar << ".shape) == 3 else " << inVar << ".copy()\n";
-    ss << "edges = cv2.Canny(gray, " << cannyLow << ", " << cannyHigh << ")\n";
-    ss << "pts = np.column_stack(np.where(edges > 0)[:, ::-1])\n";
-    ss << outVar << " = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)\n";
+    if (cannyLow > cannyHigh)
+    {
+        std::swap(cannyLow, cannyHigh);
+    }
+
+    ss << "# RANSAC 鲁棒圆拟合\n"
+       << "ransac_gray = " << inVar << " if len(" << inVar << ".shape) == 2 else cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2GRAY)\n"
+       << "ransac_edges = cv2.Canny(ransac_gray, " << cannyLow << ", " << cannyHigh << ")\n"
+       << "edge_points = np.column_stack(np.where(ransac_edges > 0)[:, ::-1]).astype(np.float32)\n"
+       << "best_center, best_radius, best_inlier_count = None, 0.0, 0\n"
+       << "best_inliers = np.empty((0, 2), dtype=np.float32)\n"
+       << "if len(edge_points) >= 10:\n"
+       << "    ransac_rng = np.random.default_rng(42)\n"
+       << "    for _ in range(" << maxIters << "):\n"
+       << "        p1, p2, p3 = edge_points[ransac_rng.choice(len(edge_points), 3, replace=False)]\n"
+       << "        d = 2.0 * (p1[0]*(p2[1]-p3[1]) + p2[0]*(p3[1]-p1[1]) + p3[0]*(p1[1]-p2[1]))\n"
+       << "        if abs(d) < 1e-4: continue\n"
+       << "        q1, q2, q3 = np.dot(p1,p1), np.dot(p2,p2), np.dot(p3,p3)\n"
+       << "        center = np.array([(q1*(p2[1]-p3[1]) + q2*(p3[1]-p1[1]) + q3*(p1[1]-p2[1]))/d, (q1*(p3[0]-p2[0]) + q2*(p1[0]-p3[0]) + q3*(p2[0]-p1[0]))/d])\n"
+       << "        radius = np.linalg.norm(center-p1)\n"
+       << "        if radius < " << minR << " or (" << maxR << " > 0 and radius > " << maxR << "): continue\n"
+       << "        distances = np.abs(np.linalg.norm(edge_points-center, axis=1)-radius)\n"
+       << "        inliers = edge_points[distances <= " << inlierDist << "]\n"
+       << "        if len(inliers) > best_inlier_count: best_center, best_radius, best_inlier_count = center, radius, len(inliers)\n"
+       << "    minimum_inliers = max(6, int(np.ceil(len(edge_points) * 0.02)))\n"
+       << "    if best_inlier_count >= minimum_inliers:\n"
+       << "        distances = np.abs(np.linalg.norm(edge_points-best_center, axis=1)-best_radius)\n"
+       << "        best_inliers = edge_points[distances <= " << inlierDist << "]\n"
+       << "    else:\n"
+       << "        best_center = None\n"
+       << outVar << " = cv2.cvtColor(" << inVar << ", cv2.COLOR_GRAY2BGR) if len(" << inVar << ".shape) == 2 else " << inVar << ".copy()\n";
+    if (drawMode == 0 || drawMode == 2)
+    {
+        ss << "for point in best_inliers.astype(np.int32): cv2.circle(" << outVar << ", tuple(point), 1, (255,200,0), -1)\n";
+    }
+    if (drawMode == 0 || drawMode == 1)
+    {
+        ss << "if best_center is not None:\n"
+           << "    cv2.circle(" << outVar << ", tuple(best_center.astype(np.int32)), int(best_radius), (0,255,0), 2, cv2.LINE_AA)\n"
+           << "    cv2.drawMarker(" << outVar << ", tuple(best_center.astype(np.int32)), (0,0,255), cv2.MARKER_CROSS, 16, 2)\n";
+    }
     return ss.str();
 }
 
@@ -573,13 +679,14 @@ std::string BarcodeQrOp::GetPrincipleDoc() const
 
 bool BarcodeQrOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
+    ClearResults();
     if (input.empty())
     {
         errorMsg = "输入图像为空";
         return false;
     }
 
-    int detectMode = _params[0].GetInt();
+    const int detectMode = _params[0].GetInt();
     bool drawBox = _params[1].GetBool();
     bool drawText = _params[2].GetBool();
     int colorIdx = _params[3].GetInt();
@@ -589,140 +696,190 @@ bool BarcodeQrOp::Process(const cv::Mat& input, cv::Mat& output, std::string& er
     else if (colorIdx == 2) highlightColor = cv::Scalar(255, 200, 0);
     else if (colorIdx == 3) highlightColor = cv::Scalar(0, 0, 255);
 
-    cv::Mat gray;
-    if (input.channels() == 3)
+#if !defined(VISIONSTUDIO_HAS_OPENCV_OBJDETECT)
+    (void)detectMode;
+    (void)drawBox;
+    (void)drawText;
+    output = input.clone();
+    errorMsg = "当前 OpenCV 构建未包含 objdetect 模块，无法执行 QR/条码解码";
+    return false;
+#else
+    try
     {
-        cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
-        output = input.clone();
-    }
-    else
-    {
-        gray = input.clone();
-        cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
-    }
-
-    // 1. 梯度分析与高频纹理增强
-    cv::Mat gradX, gradY, absGradX, absGradY, grad;
-    cv::Sobel(gray, gradX, CV_16S, 1, 0, 3);
-    cv::Sobel(gray, gradY, CV_16S, 0, 1, 3);
-    cv::convertScaleAbs(gradX, absGradX);
-    cv::convertScaleAbs(gradY, absGradY);
-
-    if (detectMode == 2)
-    {
-        // 仅一维条码模式：主要依赖水平梯度差分
-        cv::subtract(absGradX, absGradY, grad);
-    }
-    else
-    {
-        // 二维码/综合模式：综合两个方向梯度
-        cv::addWeighted(absGradX, 0.6, absGradY, 0.4, 0, grad);
-    }
-
-    // 2. 图像平滑与形态学闭运算连接条带
-    cv::Mat blurred;
-    cv::GaussianBlur(grad, blurred, cv::Size(9, 9), 0);
-
-    cv::Mat thresh;
-    cv::threshold(blurred, thresh, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(21, 7));
-    cv::Mat closed;
-    cv::morphologyEx(thresh, closed, cv::MORPH_CLOSE, kernel);
-    cv::erode(closed, closed, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)), cv::Point(-1, -1), 2);
-    cv::dilate(closed, closed, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)), cv::Point(-1, -1), 2);
-
-    // 3. 轮廓提取与几何筛选
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(closed, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-    int detectedCount = 0;
-    for (const auto& cnt : contours)
-    {
-        double area = cv::contourArea(cnt);
-        if (area < 400 || area >(input.cols * input.rows * 0.8))
+        if (input.channels() == 1)
         {
-            continue;
+            cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
+        }
+        else if (input.channels() == 4)
+        {
+            cv::cvtColor(input, output, cv::COLOR_BGRA2BGR);
+        }
+        else
+        {
+            output = input.clone();
         }
 
-        cv::RotatedRect rRect = cv::minAreaRect(cnt);
-        float w = rRect.size.width;
-        float h = rRect.size.height;
-        if (w < 15 || h < 15) continue;
-
-        float ratio = std::max(w, h) / std::max(1.0f, std::min(w, h));
-        std::string tag = (ratio > 1.8f) ? "1D Barcode" : "2D QR Code";
-
-        if (detectMode == 1 && ratio > 2.0f) continue; // 仅 QR 码模式
-        if (detectMode == 2 && ratio < 1.4f) continue; // 仅一维码模式
-
-        ++detectedCount;
-
-        if (drawBox)
+        struct DecodedCode
         {
-            cv::Point2f pts[4];
-            rRect.points(pts);
-            for (int j = 0; j < 4; ++j)
+            std::string Text;
+            std::string Type;
+            std::vector<cv::Point2f> Points;
+        };
+        std::vector<DecodedCode> decodedCodes;
+
+        if (detectMode == 0 || detectMode == 1)
+        {
+            cv::QRCodeDetector detector;
+            std::vector<std::string> decodedInfo;
+            std::vector<std::vector<cv::Point2f>> points;
+            if (detector.detectAndDecodeMulti(input, decodedInfo, points))
             {
-                cv::line(output, pts[j], pts[(j + 1) % 4], highlightColor, 2, cv::LINE_AA);
-                cv::circle(output, pts[j], 4, cv::Scalar(0, 0, 255), -1);
+                for (size_t index = 0; index < decodedInfo.size() && index < points.size(); ++index)
+                {
+                    if (!decodedInfo[index].empty())
+                    {
+                        decodedCodes.push_back({ decodedInfo[index], "QR", points[index] });
+                    }
+                }
             }
         }
 
-        if (drawText)
+#if defined(VISIONSTUDIO_HAS_OPENCV_BARCODE)
+        if (detectMode == 0 || detectMode == 2)
         {
-            cv::Rect bRect = rRect.boundingRect();
-            cv::Point textPos(std::max(4, bRect.x), std::max(20, bRect.y - 8));
-
-            std::ostringstream ss;
-            ss << tag << " [" << static_cast<int>(rRect.size.width) << "x" << static_cast<int>(rRect.size.height) << " @" << std::fixed << std::setprecision(1) << rRect.angle << "°]";
-
-            int baseline = 0;
-            cv::Size textSize = cv::getTextSize(ss.str(), cv::FONT_HERSHEY_SIMPLEX, 0.45, 1, &baseline);
-            cv::rectangle(output, textPos + cv::Point(0, baseline), textPos + cv::Point(textSize.width, -textSize.height), cv::Scalar(20, 20, 25), -1);
-            cv::putText(output, ss.str(), textPos, cv::FONT_HERSHEY_SIMPLEX, 0.45, highlightColor, 1, cv::LINE_AA);
+            cv::barcode::BarcodeDetector detector;
+            std::vector<std::string> decodedInfo;
+            std::vector<std::string> decodedTypes;
+            cv::Mat points;
+            if (detector.detectAndDecodeWithType(input, decodedInfo, decodedTypes, points) && !points.empty())
+            {
+                cv::Mat pointRows = points.reshape(2, static_cast<int>(points.total() / 4));
+                for (size_t codeIndex = 0; codeIndex < decodedInfo.size(); ++codeIndex)
+                {
+                    std::vector<cv::Point2f> codePoints;
+                    for (int pointIndex = 0; pointIndex < 4; ++pointIndex)
+                    {
+                        codePoints.push_back(pointRows.at<cv::Point2f>(static_cast<int>(codeIndex), pointIndex));
+                    }
+                    decodedCodes.push_back({ decodedInfo[codeIndex], decodedTypes[codeIndex], codePoints });
+                }
+            }
         }
-    }
+#else
+        if (detectMode == 2)
+        {
+            errorMsg = "当前 OpenCV objdetect 构建未包含 BarcodeDetector";
+            return false;
+        }
+#endif
 
-    if (detectedCount == 0)
+        for (size_t codeIndex = 0; codeIndex < decodedCodes.size(); ++codeIndex)
+        {
+            const DecodedCode& code = decodedCodes[codeIndex];
+            AddResult("code." + std::to_string(codeIndex) + ".text", "解码文本", code.Text);
+            AddResult("code." + std::to_string(codeIndex) + ".type", "码类型", code.Type);
+
+            if (drawBox && code.Points.size() >= 4)
+            {
+                for (size_t pointIndex = 0; pointIndex < code.Points.size(); ++pointIndex)
+                {
+                    cv::line(output, code.Points[pointIndex], code.Points[(pointIndex + 1) % code.Points.size()],
+                             highlightColor, 2, cv::LINE_AA);
+                }
+            }
+            if (drawText && !code.Points.empty())
+            {
+                const cv::Point textPosition(
+                    std::max(4, static_cast<int>(code.Points[0].x)),
+                    std::max(20, static_cast<int>(code.Points[0].y) - 8));
+                cv::putText(output, code.Type + ": " + code.Text, textPosition,
+                            cv::FONT_HERSHEY_SIMPLEX, 0.5, highlightColor, 1, cv::LINE_AA);
+            }
+        }
+
+        AddResult("code.count", "成功解码数量", static_cast<std::int64_t>(decodedCodes.size()));
+        errorMsg.clear();
+        return true;
+    }
+    catch (const cv::Exception& ex)
     {
-        errorMsg = "未检测到符合条码/二维码特征的区域";
+        errorMsg = ex.what();
+        return false;
     }
-
-    return true;
+#endif
 }
 
 std::string BarcodeQrOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
+    const int detectMode = _params[0].GetInt();
+    const bool drawBox = _params[1].GetBool();
+    const bool drawText = _params[2].GetBool();
+    const int colorIndex = _params[3].GetInt();
+    const char* colors[] = {
+        "cv::Scalar(0,255,0)", "cv::Scalar(0,255,255)",
+        "cv::Scalar(255,200,0)", "cv::Scalar(0,0,255)"
+    };
     std::ostringstream ss;
-    ss << "// 🏷️ 条码与二维码识别 (Barcode & QR Code Detection)\n";
-    ss << outVar << " = " << inVar << ".clone();\n";
-    ss << "cv::QRCodeDetector qrDetector;\n";
-    ss << "std::vector<cv::Point2f> points;\n";
-    ss << "std::string decodedText = qrDetector.detectAndDecode(" << inVar << ", points);\n";
-    ss << "if (!points.empty()) {\n";
-    ss << "    for (size_t i = 0; i < points.size(); ++i) {\n";
-    ss << "        cv::line(" << outVar << ", points[i], points[(i + 1) % points.size()], cv::Scalar(0, 255, 0), 2);\n";
-    ss << "    }\n";
-    ss << "    if (!decodedText.empty()) {\n";
-    ss << "        cv::putText(" << outVar << ", decodedText, points[0], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);\n";
-    ss << "    }\n";
-    ss << "}\n";
+    ss << "// QR 与一维条码真实解码，需要 OpenCV objdetect 模块\n"
+       << "if (" << inVar << ".channels() == 1) cv::cvtColor(" << inVar << ", " << outVar << ", cv::COLOR_GRAY2BGR); else " << outVar << " = " << inVar << ".clone();\n"
+       << "cv::Scalar codeColor = " << colors[colorIndex] << ";\n";
+    if (detectMode == 0 || detectMode == 1)
+    {
+        ss << "cv::QRCodeDetector qrDetector; std::vector<std::string> qrTexts; std::vector<std::vector<cv::Point2f>> qrPoints;\n"
+           << "qrDetector.detectAndDecodeMulti(" << inVar << ", qrTexts, qrPoints);\n"
+           << "for (size_t codeIndex = 0; codeIndex < qrTexts.size() && codeIndex < qrPoints.size(); ++codeIndex)\n"
+           << "{\n";
+        if (drawBox)
+        {
+            ss << "    for (size_t pointIndex = 0; pointIndex < qrPoints[codeIndex].size(); ++pointIndex) cv::line(" << outVar << ", qrPoints[codeIndex][pointIndex], qrPoints[codeIndex][(pointIndex + 1) % qrPoints[codeIndex].size()], codeColor, 2, cv::LINE_AA);\n";
+        }
+        if (drawText)
+        {
+            ss << "    if (!qrTexts[codeIndex].empty() && !qrPoints[codeIndex].empty()) cv::putText(" << outVar << ", \"QR: \" + qrTexts[codeIndex], qrPoints[codeIndex][0], cv::FONT_HERSHEY_SIMPLEX, 0.5, codeColor, 1, cv::LINE_AA);\n";
+        }
+        ss << "}\n";
+    }
+    if (detectMode == 0 || detectMode == 2)
+    {
+        ss << "cv::barcode::BarcodeDetector barcodeDetector; std::vector<std::string> barcodeTexts, barcodeTypes; cv::Mat barcodePoints;\n"
+           << "barcodeDetector.detectAndDecodeWithType(" << inVar << ", barcodeTexts, barcodeTypes, barcodePoints);\n"
+           << "// barcodePoints 包含每个一维码的四个定位顶点，可按 QR 绘制方式进行标注。\n";
+    }
     return ss.str();
 }
 
 std::string BarcodeQrOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
+    const int detectMode = _params[0].GetInt();
+    const bool drawBox = _params[1].GetBool();
+    const bool drawText = _params[2].GetBool();
+    const int colorIndex = _params[3].GetInt();
+    const char* colors[] = { "(0,255,0)", "(0,255,255)", "(255,200,0)", "(0,0,255)" };
     std::ostringstream ss;
-    ss << "# 🏷️ 条码与二维码识别 (Barcode & QR Code Detection)\n";
-    ss << outVar << " = " << inVar << ".copy()\n";
-    ss << "qr_detector = cv2.QRCodeDetector()\n";
-    ss << "decoded_text, points, _ = qr_detector.detectAndDecode(" << inVar << ")\n";
-    ss << "if points is not None:\n";
-    ss << "    pts = points.astype(np.int32).reshape((-1, 1, 2))\n";
-    ss << "    cv2.polylines(" << outVar << ", [pts], True, (0, 255, 0), 2)\n";
-    ss << "    if decoded_text:\n";
-    ss << "        cv2.putText(" << outVar << ", decoded_text, tuple(pts[0][0]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)\n";
+    ss << "# QR 与一维条码真实解码，需要带 objdetect 的 OpenCV\n"
+       << outVar << " = cv2.cvtColor(" << inVar << ", cv2.COLOR_GRAY2BGR) if len(" << inVar << ".shape) == 2 else " << inVar << ".copy()\n"
+       << "code_color = " << colors[colorIndex] << "\n";
+    if (detectMode == 0 || detectMode == 1)
+    {
+        ss << "qr_detector = cv2.QRCodeDetector()\n"
+           << "qr_ok, qr_texts, qr_points, _ = qr_detector.detectAndDecodeMulti(" << inVar << ")\n"
+           << "if qr_ok:\n"
+           << "    for qr_text, points in zip(qr_texts, qr_points):\n"
+           << "        points = points.astype(np.int32).reshape((-1, 1, 2))\n";
+        if (drawBox)
+        {
+            ss << "        cv2.polylines(" << outVar << ", [points], True, code_color, 2)\n";
+        }
+        if (drawText)
+        {
+            ss << "        if qr_text: cv2.putText(" << outVar << ", 'QR: ' + qr_text, tuple(points[0][0]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, code_color, 1)\n";
+        }
+    }
+    if (detectMode == 0 || detectMode == 2)
+    {
+        ss << "barcode_detector = cv2.barcode_BarcodeDetector()\n"
+           << "barcode_ok, barcode_texts, barcode_types, barcode_points = barcode_detector.detectAndDecodeWithType(" << inVar << ")\n";
+    }
     return ss.str();
 }
 
