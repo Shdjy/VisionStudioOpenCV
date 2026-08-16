@@ -297,16 +297,26 @@ MatchTemplateOp::MatchTemplateOp()
     // 1. 模板来源
     OpParameter tplSrcParam;
     tplSrcParam.Name = "tplSource";
-    tplSrcParam.DisplayName = "模板来源 (Template Source)";
+    tplSrcParam.DisplayName = "模板来源方式 (Template Source)";
     tplSrcParam.Type = ParamType::ComboBox;
     tplSrcParam.Value = 0;
     tplSrcParam.EnumOptions = {
-        "当前处理步骤输入图像 (Current Input)",
-        "原始基准输入图像 (Original Source Image)"
+        "1. 在当前输入图像中框选 ROI (Crop from Input)",
+        "2. 在原始基准图像中框选 ROI (Crop from Original)",
+        "3. 加载本地外部模板图片文件 (Load Local Image File)"
     };
     _params.push_back(tplSrcParam);
 
-    // 2. 模板 ROI X
+    // 2. 本地模板图片路径
+    OpParameter tplPathParam;
+    tplPathParam.Name = "tplPath";
+    tplPathParam.DisplayName = "本地模板图片 (Local Template Image)";
+    tplPathParam.Type = ParamType::FilePath;
+    tplPathParam.Value = std::string("");
+    tplPathParam.Tooltip = "当模板来源选择【加载本地外部模板图片】时，点击浏览选择本地模板图像文件";
+    _params.push_back(tplPathParam);
+
+    // 3. 模板 ROI X
     OpParameter xParam;
     xParam.Name = "roiX";
     xParam.DisplayName = "模板区域 X (px)";
@@ -317,7 +327,7 @@ MatchTemplateOp::MatchTemplateOp()
     xParam.Step = 5;
     _params.push_back(xParam);
 
-    // 3. 模板 ROI Y
+    // 4. 模板 ROI Y
     OpParameter yParam;
     yParam.Name = "roiY";
     yParam.DisplayName = "模板区域 Y (px)";
@@ -328,7 +338,7 @@ MatchTemplateOp::MatchTemplateOp()
     yParam.Step = 5;
     _params.push_back(yParam);
 
-    // 4. 模板 ROI W
+    // 5. 模板 ROI W
     OpParameter wParam;
     wParam.Name = "roiW";
     wParam.DisplayName = "模板宽度 Width (px)";
@@ -339,7 +349,7 @@ MatchTemplateOp::MatchTemplateOp()
     wParam.Step = 5;
     _params.push_back(wParam);
 
-    // 5. 模板 ROI H
+    // 6. 模板 ROI H
     OpParameter hParam;
     hParam.Name = "roiH";
     hParam.DisplayName = "模板高度 Height (px)";
@@ -350,7 +360,7 @@ MatchTemplateOp::MatchTemplateOp()
     hParam.Step = 5;
     _params.push_back(hParam);
 
-    // 6. 匹配得分阈值
+    // 7. 匹配得分阈值
     OpParameter scoreParam;
     scoreParam.Name = "scoreThreshold";
     scoreParam.DisplayName = "置信度得分门限 (Score Threshold)";
@@ -361,7 +371,7 @@ MatchTemplateOp::MatchTemplateOp()
     scoreParam.Step = 0.02;
     _params.push_back(scoreParam);
 
-    // 7. 多目标匹配
+    // 8. 多目标匹配
     OpParameter multiParam;
     multiParam.Name = "multiMatch";
     multiParam.DisplayName = "多目标检测模式 (Multi-Match All)";
@@ -374,10 +384,11 @@ MatchTemplateOp::MatchTemplateOp()
 std::string MatchTemplateOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：模板匹配与目标定位 (matchTemplate)\n\n"
-           "基于滑窗互相关矩阵在图像中遍历搜索指定 ROI 模板：\n"
+           "基于滑窗互相关矩阵在图像中遍历搜索指定 ROI 模板或本地模板图像：\n"
+           "* **本地外部模板支持**：支持直接加载本地高精度标准品切片进行跨图检测；\n"
            "* **度量方法**：归一化相关系数 $R(x, y) = \\frac{\\sum (T - \\bar{T})(I - \\bar{I})}{\\sqrt{\\sum (T - \\bar{T})^2 \\sum (I - \\bar{I})^2}} \\in [-1, 1]$；\n"
            "* **单目标定位**：`cv::minMaxLoc` 寻找全局响应峰值点；\n"
-           "* **多目标检测与非极大值抑制**：基于置信度门限与距离邻域剔除重复框，批量定位所有工件。";
+           "* **多目标检测与非极大值抑制**：基于置信度门限与距离邻域批量定位所有工件。";
 }
 
 void MatchTemplateOp::SetTemplateRoi(int x, int y, int w, int h)
@@ -394,12 +405,13 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
 
     int methodIdx = _params[0].GetInt();
     int tplSrc = _params[1].GetInt();
-    int rx = _params[2].GetInt();
-    int ry = _params[3].GetInt();
-    int rw = _params[4].GetInt();
-    int rh = _params[5].GetInt();
-    double scoreThresh = _params[6].GetDouble();
-    bool multiMatch = _params[7].GetBool();
+    std::string tplPath = _params[2].GetString();
+    int rx = _params[3].GetInt();
+    int ry = _params[4].GetInt();
+    int rw = _params[5].GetInt();
+    int rh = _params[6].GetInt();
+    double scoreThresh = _params[7].GetDouble();
+    bool multiMatch = _params[8].GetBool();
 
     int cvMethod = cv::TM_CCOEFF_NORMED;
     if (methodIdx == 0) cvMethod = cv::TM_SQDIFF;
@@ -408,22 +420,48 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
     else if (methodIdx == 3) cvMethod = cv::TM_CCORR_NORMED;
     else if (methodIdx == 4) cvMethod = cv::TM_CCOEFF;
 
-    // 确定模板图底图
-    cv::Mat baseImg = input;
-    if (tplSrc == 1)
+    cv::Mat tpl;
+    cv::Rect tplRoi(0, 0, 0, 0);
+
+    if (tplSrc == 2)
     {
-        cv::Mat orig = PipelineContext::Instance().GetSourceImage();
-        if (!orig.empty()) baseImg = orig;
+        // 加载本地外部模板文件
+        if (tplPath.empty())
+        {
+            output = input.clone();
+            cv::putText(output, "Please select a local template image file in Property Panel", cv::Point(20, 40),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 165, 255), 2);
+            return true;
+        }
+
+        tpl = cv::imread(tplPath, cv::IMREAD_COLOR);
+        if (tpl.empty())
+        {
+            errorMsg = "无法读取指定的本地模板图像文件: " + tplPath;
+            output = input.clone();
+            return false;
+        }
+        rw = tpl.cols;
+        rh = tpl.rows;
     }
+    else
+    {
+        // 框选 ROI 模式
+        cv::Mat baseImg = input;
+        if (tplSrc == 1)
+        {
+            cv::Mat orig = PipelineContext::Instance().GetSourceImage();
+            if (!orig.empty()) baseImg = orig;
+        }
 
-    // 校验 ROI 边界
-    rx = std::max(0, std::min(rx, baseImg.cols - 10));
-    ry = std::max(0, std::min(ry, baseImg.rows - 10));
-    rw = std::max(10, std::min(rw, baseImg.cols - rx));
-    rh = std::max(10, std::min(rh, baseImg.rows - ry));
+        rx = std::max(0, std::min(rx, baseImg.cols - 10));
+        ry = std::max(0, std::min(ry, baseImg.rows - 10));
+        rw = std::max(10, std::min(rw, baseImg.cols - rx));
+        rh = std::max(10, std::min(rh, baseImg.rows - ry));
 
-    cv::Rect tplRoi(rx, ry, rw, rh);
-    cv::Mat tpl = baseImg(tplRoi).clone();
+        tplRoi = cv::Rect(rx, ry, rw, rh);
+        tpl = baseImg(tplRoi).clone();
+    }
 
     if (tpl.cols > input.cols || tpl.rows > input.rows)
     {
@@ -448,8 +486,11 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
         if (input.channels() == 1) cv::cvtColor(input, output, cv::COLOR_GRAY2BGR);
         else output = input.clone();
 
-        // 绘制模板自身选区框 (洋红色虚框) 作为参考
-        cv::rectangle(output, tplRoi, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
+        // 若是框选模式，绘制洋红色参考框
+        if (tplSrc != 2 && tplRoi.width > 0)
+        {
+            cv::rectangle(output, tplRoi, cv::Scalar(255, 0, 255), 1, cv::LINE_AA);
+        }
 
         if (!multiMatch)
         {
@@ -475,7 +516,7 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
         }
         else
         {
-            // 多目标阈值匹配与 NMS
+            // 多目标阈值匹配
             int matchCount = 0;
             for (int r = 0; r < result.rows; ++r)
             {
@@ -507,19 +548,28 @@ bool MatchTemplateOp::Process(const cv::Mat& input, cv::Mat& output, std::string
 std::string MatchTemplateOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
     int methodIdx = _params[0].GetInt();
-    int rx = _params[2].GetInt();
-    int ry = _params[3].GetInt();
-    int rw = _params[4].GetInt();
-    int rh = _params[5].GetInt();
-    double scoreThresh = _params[6].GetDouble();
+    int tplSrc = _params[1].GetInt();
+    std::string tplPath = _params[2].GetString();
+    int rx = _params[3].GetInt();
+    int ry = _params[4].GetInt();
+    int rw = _params[5].GetInt();
+    int rh = _params[6].GetInt();
+    double scoreThresh = _params[7].GetDouble();
 
     std::string methodStr = (methodIdx == 5 ? "cv::TM_CCOEFF_NORMED" : (methodIdx == 1 ? "cv::TM_SQDIFF_NORMED" : "cv::TM_CCOEFF"));
 
     std::stringstream ss;
-    ss << "// 模板匹配与目标定位\n"
-       << "cv::Rect tplRoi(" << rx << ", " << ry << ", " << rw << ", " << rh << ");\n"
-       << "cv::Mat templateImg = " << inVar << "(tplRoi).clone();\n"
-       << "cv::Mat result_" << outVar << ";\n"
+    ss << "// 模板匹配与目标定位\n";
+    if (tplSrc == 2 && !tplPath.empty())
+    {
+        ss << "cv::Mat templateImg = cv::imread(\"" << tplPath << "\");\n";
+    }
+    else
+    {
+        ss << "cv::Rect tplRoi(" << rx << ", " << ry << ", " << rw << ", " << rh << ");\n"
+           << "cv::Mat templateImg = " << inVar << "(tplRoi).clone();\n";
+    }
+    ss << "cv::Mat result_" << outVar << ";\n"
        << "cv::matchTemplate(" << inVar << ", templateImg, result_" << outVar << ", " << methodStr << ");\n"
        << "double minVal, maxVal; cv::Point minLoc, maxLoc;\n"
        << "cv::minMaxLoc(result_" << outVar << ", &minVal, &maxVal, &minLoc, &maxLoc);\n"
@@ -532,16 +582,25 @@ std::string MatchTemplateOp::GenerateCppCode(const std::string& inVar, const std
 
 std::string MatchTemplateOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    int rx = _params[2].GetInt();
-    int ry = _params[3].GetInt();
-    int rw = _params[4].GetInt();
-    int rh = _params[5].GetInt();
-    double scoreThresh = _params[6].GetDouble();
+    int tplSrc = _params[1].GetInt();
+    std::string tplPath = _params[2].GetString();
+    int rx = _params[3].GetInt();
+    int ry = _params[4].GetInt();
+    int rw = _params[5].GetInt();
+    int rh = _params[6].GetInt();
+    double scoreThresh = _params[7].GetDouble();
 
     std::stringstream ss;
-    ss << "# 模板匹配与目标定位\n"
-       << "template_img = " << inVar << "[" << ry << ":" << (ry + rh) << ", " << rx << ":" << (rx + rw) << "].copy()\n"
-       << "res = cv2.matchTemplate(" << inVar << ", template_img, cv2.TM_CCOEFF_NORMED)\n"
+    ss << "# 模板匹配与目标定位\n";
+    if (tplSrc == 2 && !tplPath.empty())
+    {
+        ss << "template_img = cv2.imread(r'" << tplPath << "')\n";
+    }
+    else
+    {
+        ss << "template_img = " << inVar << "[" << ry << ":" << (ry + rh) << ", " << rx << ":" << (rx + rw) << "].copy()\n";
+    }
+    ss << "res = cv2.matchTemplate(" << inVar << ", template_img, cv2.TM_CCOEFF_NORMED)\n"
        << "min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)\n"
        << outVar << " = " << inVar << ".copy()\n"
        << "if max_val >= " << scoreThresh << ":\n"

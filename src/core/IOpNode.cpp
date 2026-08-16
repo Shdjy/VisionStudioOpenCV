@@ -1,6 +1,6 @@
 #include "IOpNode.h"
 
-bool IOpNode::SetParameter(const std::string& name, const std::variant<int, double, bool>& value)
+bool IOpNode::SetParameter(const std::string& name, const std::variant<int, double, bool, std::string>& value)
 {
     OpParameter* param = FindParameter(name);
     if (param != nullptr)

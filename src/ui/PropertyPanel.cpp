@@ -7,6 +7,9 @@
 #include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QEvent>
 
@@ -309,6 +312,49 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
             }
 
             rowLayout->addWidget(chk);
+        }
+        else if (param.Type == ParamType::FilePath)
+        {
+            auto* fileLayout = new QHBoxLayout();
+            auto* lineEdit = new QLineEdit(QString::fromStdString(param.GetString()), rowWidget);
+            lineEdit->setPlaceholderText("请选择本地图像文件路径...");
+            lineEdit->setReadOnly(true);
+            lineEdit->setEnabled(!isPreview);
+
+            auto* btnBrowse = new QPushButton("📁 浏览...", rowWidget);
+            btnBrowse->setCursor(Qt::PointingHandCursor);
+            btnBrowse->setEnabled(!isPreview);
+
+            if (!isPreview)
+            {
+                connect(btnBrowse, &QPushButton::clicked, [this, lineEdit, paramName]() {
+                    QString filePath = QFileDialog::getOpenFileName(
+                        this,
+                        "选择本地模板图像文件",
+                        QString(),
+                        "图像文件 (*.png *.jpg *.jpeg *.bmp *.tif *.webp);;所有文件 (*.*)"
+                    );
+                    if (!filePath.isEmpty())
+                    {
+                        lineEdit->setText(filePath);
+                        if (_pipelineMgr && _currentStepIndex >= 0)
+                        {
+                            PipelineStep* s = _pipelineMgr->GetStep(_currentStepIndex);
+                            if (s && s->GetOpNode())
+                            {
+                                s->GetOpNode()->SetParameter(paramName, filePath.toStdString());
+                                _pipelineMgr->MarkDirtyFrom(_currentStepIndex);
+                                _pipelineMgr->Execute();
+                                emit ParameterChanged(_currentStepIndex);
+                            }
+                        }
+                    }
+                });
+            }
+
+            fileLayout->addWidget(lineEdit, 1);
+            fileLayout->addWidget(btnBrowse);
+            rowLayout->addLayout(fileLayout);
         }
 
         ui->dynamicParamsLayout->addWidget(rowWidget);

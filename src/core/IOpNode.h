@@ -15,7 +15,8 @@ enum class ParamType
     IntSlider,      // 整数滑动条 + 微调框
     DoubleSlider,   // 浮点滑动条 + 微调框
     ComboBox,       // 下拉选择框
-    CheckBox        // 布尔勾选框
+    CheckBox,       // 布尔勾选框
+    FilePath        // 本地文件路径选择器 (带浏览按钮)
 };
 
 /**
@@ -27,7 +28,7 @@ struct OpParameter
     std::string DisplayName;                            // UI 界面显示名称 (如 "核大小 (ksize)")
     std::string Tooltip;                                // 鼠标悬浮详细提示与建议
     ParamType Type;                                     // 控件呈现类型
-    std::variant<int, double, bool> Value;              // 当前值
+    std::variant<int, double, bool, std::string> Value; // 当前值
     std::variant<int, double> MinValue;                 // 最小值
     std::variant<int, double> MaxValue;                 // 最大值
     std::variant<int, double> Step;                     // 调节步长
@@ -62,6 +63,15 @@ struct OpParameter
             return std::get<bool>(Value);
         }
         return false;
+    }
+
+    std::string GetString() const
+    {
+        if (std::holds_alternative<std::string>(Value))
+        {
+            return std::get<std::string>(Value);
+        }
+        return "";
     }
 };
 
@@ -122,7 +132,7 @@ public:
      * @param value 新值
      * @return 是否设置成功
      */
-    virtual bool SetParameter(const std::string& name, const std::variant<int, double, bool>& value);
+    virtual bool SetParameter(const std::string& name, const std::variant<int, double, bool, std::string>& value);
 
     /**
      * @brief 获取指定参数的元数据指针
