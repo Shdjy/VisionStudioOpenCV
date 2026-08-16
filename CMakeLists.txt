@@ -129,9 +129,9 @@ set(RESOURCES
 )
 
 # ----------------------------------------------------------------------------
-# 4. 创建可执行目标
+# 4. 创建纯净 GUI 可执行目标 (WIN32 移除附加黑框控制台)
 # ----------------------------------------------------------------------------
-add_executable(${PROJECT_NAME}
+add_executable(${PROJECT_NAME} WIN32
     src/main.cpp
     ${CORE_SOURCES}
     ${BLL_SOURCES}
@@ -153,12 +153,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${OpenCV_INCLUDE_DIRS}
 )
 
-# 链接库
+# 链接库 (包含 dwmapi 支持沉浸式深色标题栏)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Gui
     ${OpenCV_LIBS}
+    dwmapi
 )
 
 # 编译器选项适配

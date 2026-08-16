@@ -9,11 +9,21 @@
 #include <QStyle>
 #include <QShowEvent>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <dwmapi.h>
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#endif
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    setWindowIcon(QIcon(":/icons/app_icon.png"));
 
     InitUiAndDocks();
     SetupConnections();
@@ -35,6 +45,17 @@ void MainWindow::showEvent(QShowEvent* event)
     if (_isFirstShow)
     {
         _isFirstShow = false;
+
+#ifdef _WIN32
+        // 启用 Windows 10/11 原生沉浸式暗色标题栏 (与整个 IDE 色调完美统一)
+        HWND hwnd = (HWND)winId();
+        if (hwnd)
+        {
+            BOOL darkMode = TRUE;
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
+            DwmSetWindowAttribute(hwnd, 19, &darkMode, sizeof(darkMode));
+        }
+#endif
 
         // 1. 确保启动全屏最大化
         setWindowState(windowState() | Qt::WindowMaximized);
@@ -60,7 +81,7 @@ void MainWindow::InitUiAndDocks()
     ui->centralLayout->addWidget(_imageViewer);
 
     // 辅助配置 Lambda: 保证每个 DockWidget 均可自由脱离、任意边停靠、边缘吸附
-    auto configureDock = [this](QDockWidget* dock) {
+    auto configureDock = [](QDockWidget* dock) {
         dock->setAllowedAreas(Qt::AllDockWidgetAreas);
         dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable | QDockWidget::DockWidgetClosable);
     };
@@ -123,7 +144,7 @@ void MainWindow::InitUiAndDocks()
     tabifyDockWidget(_dockCode, _dockLog);
     _dockCode->raise();
 
-    // 10. 设置工具栏图标与悬浮提示 Tooltip (纯图标模式节省空间)
+    // 10. 设置工具栏与菜单项专属生动图标 (各不相同、绝不重复)
     ui->mainToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     ui->mainToolBar->setIconSize(QSize(22, 22));
 
@@ -133,8 +154,8 @@ void MainWindow::InitUiAndDocks()
     ui->actionExportProject->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
     ui->actionRunPipeline->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     ui->actionClearPipeline->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
-    ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
-    ui->actionAbout->setIcon(style()->standardIcon(QStyle::SP_MessageBoxInformation));
+    ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_DesktopIcon));
+    ui->actionAbout->setIcon(QIcon(":/icons/app_icon.png")); // 专属应用 Logo
 
     // 11. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标 (带明确选中状态指示)
     ui->mainToolBar->addSeparator();
@@ -437,6 +458,7 @@ void MainWindow::OnOperatorAddRequested(const QString& opName)
         int stepIdx = _pipelineManager.AddStep(std::move(op));
         _pipelineManager.Execute();
         _pipelineList->SelectStep(stepIdx);
+        _propertyPanel->SetCurrentStep(stepIdx); // 显式激活参数编辑模式
         Logger::Info("MainWindow", "流水线添加算子: " + dispName);
     }
 }

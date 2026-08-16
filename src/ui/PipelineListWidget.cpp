@@ -49,6 +49,7 @@ void PipelineListWidget::SelectStep(int index)
     if (index >= 0 && index < ui->listSteps->count())
     {
         ui->listSteps->setCurrentRow(index);
+        emit StepSelected(index);
     }
 }
 
