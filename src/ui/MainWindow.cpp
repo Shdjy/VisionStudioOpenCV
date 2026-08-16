@@ -61,10 +61,9 @@ void MainWindow::showEvent(QShowEvent* event)
         // 1. 确保启动全屏最大化
         setWindowState(windowState() | Qt::WindowMaximized);
 
-        // 2. 初始比例分配 (VS 风格黄金比例布局)
+        // 2. 初始比例分配 (VS 风格黄金比例布局，默认底部折叠留出最大视觉视口)
         resizeDocks({ _dockOperators, _dockPipeline }, { 280, 280 }, Qt::Horizontal);
         resizeDocks({ _dockProperties, _dockHistogram }, { 340, 340 }, Qt::Horizontal);
-        resizeDocks({ _dockCode, _dockLog }, { 220, 220 }, Qt::Vertical);
     }
 }
 
@@ -121,7 +120,7 @@ void MainWindow::InitUiAndDocks()
     _dockHistogram->setWidget(_histogramWidget);
     addDockWidget(Qt::RightDockWidgetArea, _dockHistogram);
 
-    // 7. 底部 Dock: 多语言代码生成
+    // 7. 底部 Dock: 多语言代码生成 (默认隐藏，点击工具栏/菜单时唤出)
     _dockCode = new QDockWidget("多语言代码生成 (Code Generation)", this);
     _dockCode->setObjectName("dockCode");
     configureDock(_dockCode);
@@ -129,21 +128,22 @@ void MainWindow::InitUiAndDocks()
     _codePreview->SetPipelineManager(&_pipelineManager);
     _dockCode->setWidget(_codePreview);
     addDockWidget(Qt::BottomDockWidgetArea, _dockCode);
+    _dockCode->hide();
 
-    // 8. 底部 Dock: 运行日志控制台
+    // 8. 底部 Dock: 运行日志控制台 (默认隐藏，点击工具栏/菜单时唤出)
     _dockLog = new QDockWidget("运行日志与控制台 (Log Console)", this);
     _dockLog->setObjectName("dockLog");
     configureDock(_dockLog);
     _logPanel = new LogPanelWidget(_dockLog);
     _dockLog->setWidget(_logPanel);
     addDockWidget(Qt::BottomDockWidgetArea, _dockLog);
+    _dockLog->hide();
 
     // 9. Tab 组合与初始激活
     tabifyDockWidget(_dockProperties, _dockHistogram);
     _dockProperties->raise();
 
     tabifyDockWidget(_dockCode, _dockLog);
-    _dockCode->raise();
 
     // 10. 设置工具栏与菜单项专属生动图标 (各不相同、绝不重复)
     ui->mainToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -167,12 +167,12 @@ void MainWindow::InitUiAndDocks()
     connect(actionCreateMask, &QAction::triggered, this, &MainWindow::OnCreateMaskDialog);
     ui->mainToolBar->addAction(actionCreateMask);
 
-    // 12. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标 (带明确选中状态指示)
+    // 12. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标 (默认未选中，点击唤出)
     ui->mainToolBar->addSeparator();
 
     auto* actionToggleCode = new QAction(style()->standardIcon(QStyle::SP_FileDialogContentsView), "代码生成面板", this);
     actionToggleCode->setCheckable(true);
-    actionToggleCode->setChecked(_dockCode->isVisible());
+    actionToggleCode->setChecked(false);
     actionToggleCode->setToolTip("显示/隐藏 底部代码生成面板 (Alt+C)");
     actionToggleCode->setStatusTip("快速展开或折叠底部多语言代码生成视口");
     actionToggleCode->setShortcut(QKeySequence("Alt+C"));
@@ -182,7 +182,7 @@ void MainWindow::InitUiAndDocks()
 
     auto* actionToggleLog = new QAction(style()->standardIcon(QStyle::SP_MessageBoxInformation), "运行日志面板", this);
     actionToggleLog->setCheckable(true);
-    actionToggleLog->setChecked(_dockLog->isVisible());
+    actionToggleLog->setChecked(false);
     actionToggleLog->setToolTip("显示/隐藏 底部运行日志控制台 (Alt+L)");
     actionToggleLog->setStatusTip("快速展开或折叠底部运行日志视口");
     actionToggleLog->setShortcut(QKeySequence("Alt+L"));
