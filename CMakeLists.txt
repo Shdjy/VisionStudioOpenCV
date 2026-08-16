@@ -109,6 +109,7 @@ set(CODEGEN_SOURCES
 set(UTILS_SOURCES
     src/utils/Logger.cpp
     src/utils/MatUtils.cpp
+    src/utils/IconUtils.cpp
 )
 
 set(UI_SOURCES

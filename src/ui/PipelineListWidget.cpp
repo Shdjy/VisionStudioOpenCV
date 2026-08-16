@@ -1,38 +1,8 @@
 #include "PipelineListWidget.h"
 #include "ui_PipelineListWidget.h"
+#include "../utils/IconUtils.h"
 #include <QMessageBox>
-#include <QPainter>
-#include <QPen>
-#include <QPixmap>
-#include <QIcon>
 #include <QStyle>
-
-namespace
-{
-    /**
-     * @brief 绘制高清抗锯齿红色 ❌ 图标
-     * @param size 图标像素尺寸
-     * @return 精致的红色 ❌ 图标
-     */
-    static QIcon CreateRedCrossIcon(int size = 32)
-    {
-        QPixmap pixmap(size, size);
-        pixmap.fill(Qt::transparent);
-
-        QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
-
-        // 鲜明醒目的现代工业红与圆润端点
-        QPen pen(QColor(235, 60, 60), size * 0.16, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        painter.setPen(pen);
-
-        int margin = size * 0.22;
-        painter.drawLine(margin, margin, size - margin, size - margin);
-        painter.drawLine(margin, size - margin, size - margin, margin);
-
-        return QIcon(pixmap);
-    }
-}
 
 PipelineListWidget::PipelineListWidget(QWidget* parent)
     : QWidget(parent)
@@ -54,7 +24,7 @@ PipelineListWidget::PipelineListWidget(QWidget* parent)
     ui->btnMoveDown->setFixedSize(btnSize);
     ui->btnMoveDown->setToolTip("下移所选算子步骤 (Down)");
 
-    ui->btnRemove->setIcon(CreateRedCrossIcon(32));
+    ui->btnRemove->setIcon(IconUtils::CreateRedCrossIcon(32));
     ui->btnRemove->setIconSize(btnIconSize);
     ui->btnRemove->setFixedSize(btnSize);
     ui->btnRemove->setToolTip("删除所选算子步骤 (Delete / 红色❌)");

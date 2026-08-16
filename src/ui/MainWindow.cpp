@@ -8,6 +8,7 @@
 #include "../core/OpRegistry.h"
 #include "../bll/ProjectManager.h"
 #include "../utils/Logger.h"
+#include "../utils/IconUtils.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QStyle>
@@ -154,8 +155,8 @@ void MainWindow::InitUiAndDocks()
 
     ui->actionOpenImage->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     ui->actionSaveImage->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
-    ui->actionImportProject->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
-    ui->actionExportProject->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
+    ui->actionImportProject->setIcon(IconUtils::CreateImportIcon());
+    ui->actionExportProject->setIcon(IconUtils::CreateExportIcon());
     ui->actionRunPipeline->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     ui->actionClearPipeline->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
     ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_DesktopIcon));
