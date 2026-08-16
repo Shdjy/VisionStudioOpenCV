@@ -11,7 +11,7 @@ public:
     BlendWithSourceOp();
     ~BlendWithSourceOp() override = default;
 
-    OpCategory GetCategory() const override { return OpCategory::ImageEnhancement; }
+    OpCategory GetCategory() const override { return OpCategory::MaskAndArithmetic; }
     std::string GetName() const override { return "BlendWithSource"; }
     std::string GetDisplayName() const override { return "双图与原图算术复合运算 (Image Arithmetic & Blending)"; }
     std::string GetDescription() const override { return "支持当前图与原始输入图或前置步骤进行加权融合、绝对值差分(缺陷检测)、按位与/或/异或掩码及饱和加减运算。"; }
@@ -38,7 +38,7 @@ public:
     MaskApplyOp();
     ~MaskApplyOp() override = default;
 
-    OpCategory GetCategory() const override { return OpCategory::Thresholding; }
+    OpCategory GetCategory() const override { return OpCategory::MaskAndArithmetic; }
     std::string GetName() const override { return "MaskApply"; }
     std::string GetDisplayName() const override { return "掩码抠图与原图ROI提取 (Mask Apply ROI)"; }
     std::string GetDescription() const override { return "将当前二值化或分割结果作为掩码(Mask)，作用回原始图像，仅提取目标区域并支持自定义背景填充。"; }

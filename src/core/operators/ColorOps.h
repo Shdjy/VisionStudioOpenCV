@@ -11,7 +11,7 @@ public:
     CvtColorOp();
     ~CvtColorOp() override = default;
 
-    OpCategory GetCategory() const override { return OpCategory::ColorConversion; }
+    OpCategory GetCategory() const override { return OpCategory::ColorAndChannels; }
     std::string GetName() const override { return "CvtColor"; }
     std::string GetDisplayName() const override { return "色彩空间转换 (CvtColor)"; }
     std::string GetDescription() const override { return "在 BGR、灰度 (GRAY)、HSV、Lab、YCrCb 等色彩空间之间相互转换。"; }
@@ -38,7 +38,7 @@ public:
     ChannelSplitOp();
     ~ChannelSplitOp() override = default;
 
-    OpCategory GetCategory() const override { return OpCategory::ColorConversion; }
+    OpCategory GetCategory() const override { return OpCategory::ColorAndChannels; }
     std::string GetName() const override { return "ChannelSplit"; }
     std::string GetDisplayName() const override { return "通道分离提取 (Channel Split)"; }
     std::string GetDescription() const override { return "提取多通道图像中的某一个单独颜色通道 (如 B/G/R 或 H/S/V)。"; }

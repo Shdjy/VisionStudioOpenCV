@@ -2,6 +2,7 @@
 #include "ui_OperatorTreeWidget.h"
 #include "../core/OpCategory.h"
 #include <map>
+#include <QStyle>
 
 OperatorTreeWidget::OperatorTreeWidget(QWidget* parent)
     : QWidget(parent)
@@ -56,23 +57,40 @@ void OperatorTreeWidget::BuildCategoryTree(const std::vector<OpMetadata>& ops)
 {
     ui->treeOperators->clear();
 
-    std::map<OpCategory, QTreeWidgetItem*> catItems;
-
+    // 预先建立按分类分组的字典
+    std::map<OpCategory, std::vector<OpMetadata>> grouped;
     for (const auto& meta : ops)
     {
-        if (catItems.find(meta.Category) == catItems.end())
+        grouped[meta.Category].push_back(meta);
+    }
+
+    // 按照官方标准分类顺序插入
+    auto allCats = OpCategoryUtils::GetAllCategories();
+    for (auto cat : allCats)
+    {
+        auto it = grouped.find(cat);
+        if (it == grouped.end() || it->second.empty())
         {
-            auto* catItem = new QTreeWidgetItem(ui->treeOperators);
-            catItem->setText(0, QString::fromStdString(OpCategoryUtils::ToString(meta.Category)));
-            catItem->setFlags(catItem->flags() & ~Qt::ItemIsSelectable);
-            catItem->setIcon(0, QIcon());
-            catItems[meta.Category] = catItem;
+            continue;
         }
 
-        auto* opItem = new QTreeWidgetItem(catItems[meta.Category]);
-        opItem->setText(0, QString("%1 (%2)").arg(QString::fromStdString(meta.DisplayName), QString::fromStdString(meta.Name)));
-        opItem->setToolTip(0, QString::fromStdString(meta.Description));
-        opItem->setData(0, Qt::UserRole, QString::fromStdString(meta.Name));
+        auto* catItem = new QTreeWidgetItem(ui->treeOperators);
+        catItem->setText(0, QString("%1  [%2]").arg(QString::fromStdString(OpCategoryUtils::ToString(cat))).arg(it->second.size()));
+        catItem->setFlags(catItem->flags() & ~Qt::ItemIsSelectable);
+        catItem->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
+
+        QFont font = catItem->font(0);
+        font.setBold(true);
+        catItem->setFont(0, font);
+
+        for (const auto& meta : it->second)
+        {
+            auto* opItem = new QTreeWidgetItem(catItem);
+            opItem->setText(0, QString("%1").arg(QString::fromStdString(meta.DisplayName)));
+            opItem->setToolTip(0, QString::fromStdString(meta.Description));
+            opItem->setData(0, Qt::UserRole, QString::fromStdString(meta.Name));
+            opItem->setIcon(0, style()->standardIcon(QStyle::SP_FileIcon));
+        }
     }
 
     ui->treeOperators->expandAll();

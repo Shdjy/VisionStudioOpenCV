@@ -31,7 +31,7 @@ public:
     InteractiveMaskOp();
     ~InteractiveMaskOp() override = default;
 
-    OpCategory GetCategory() const override { return OpCategory::Thresholding; }
+    OpCategory GetCategory() const override { return OpCategory::MaskAndArithmetic; }
     std::string GetName() const override { return "InteractiveMask"; }
     std::string GetDisplayName() const override { return "交互式掩码与局部ROI处理 (Interactive Mask ROI)"; }
     std::string GetDescription() const override { return "通过鼠标拖动绘制矩形/圆形/椭圆形状或阈值自动抠图，支持局部滤波、锐化、抠图提取与半透明高亮叠加。"; }

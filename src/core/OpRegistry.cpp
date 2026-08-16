@@ -11,6 +11,7 @@
 #include "operators/FeatureOps.h"
 #include "operators/ArithmeticOps.h"
 #include "operators/InteractiveMaskOp.h"
+#include "operators/AdvancedOps.h"
 #include <algorithm>
 
 std::unique_ptr<IOpNode> OpRegistry::Create(const std::string& name) const
@@ -79,61 +80,73 @@ std::vector<OpMetadata> OpRegistry::SearchOperators(const std::string& keyword) 
 
 void OpRegistry::RegisterAllBuiltinOperators()
 {
-    // 1. 色彩空间
+    // 1. 颜色与通道操作 (Color & Channels)
     Register<CvtColorOp>();
     Register<ChannelSplitOp>();
+    Register<LUTOp>();
 
-    // 2. 滤波与平滑
+    // 2. 滤波与图像平滑 (Filtering & Denoise)
     Register<GaussianBlurOp>();
     Register<BlurOp>();
+    Register<BoxFilterOp>();
     Register<MedianBlurOp>();
     Register<BilateralFilterOp>();
     Register<Filter2DOp>();
 
-    // 3. 阈值与二值化
+    // 3. 阈值分割与二值化 (Thresholding & Segmentation)
     Register<ThresholdOp>();
     Register<OtsuThresholdOp>();
     Register<AdaptiveThresholdOp>();
     Register<InRangeOp>();
     Register<ThresholdTruncateOp>();
-    Register<MaskApplyOp>();
-    Register<InteractiveMaskOp>();
 
-    // 4. 形态学
+    // 4. 掩码与双图复合 (Mask & Image Arithmetic)
+    Register<InteractiveMaskOp>();
+    Register<MaskApplyOp>();
+    Register<BlendWithSourceOp>();
+
+    // 5. 形态学与结构运算 (Morphology Operations)
     Register<DilateOp>();
     Register<ErodeOp>();
     Register<MorphologyExOp>();
 
-    // 5. 边缘与梯度
+    // 6. 几何与空间变换 (Geometry & Transformations)
+    Register<ResizeOp>();
+    Register<RotateOp>();
+    Register<FlipOp>();
+    Register<CropRoiOp>();
+    Register<PerspectiveTransformOp>();
+    Register<PolarTransformOp>();
+    Register<ImagePyramidOp>();
+
+    // 7. 边缘与梯度检测 (Edge & Gradient Detection)
     Register<CannyOp>();
     Register<SobelOp>();
     Register<ScharrOp>();
     Register<LaplacianOp>();
 
-    // 6. 几何变换
-    Register<ResizeOp>();
-    Register<RotateOp>();
-    Register<FlipOp>();
-    Register<CropRoiOp>();
+    // 8. 轮廓与连通域分析 (Contours & Connected Components)
+    Register<FindContoursOp>();
+    Register<ConnectedComponentsOp>();
+    Register<DistanceTransformOp>();
 
-    // 7. 图像增强与多图运算
+    // 9. 霍夫特征与几何检测 (Hough Transforms)
+    Register<HoughLinesPOp>();
+    Register<HoughCirclesOp>();
+    Register<FitLineOp>();
+
+    // 10. 特征提取与模板匹配 (Features & Matching)
+    Register<CornerHarrisOp>();
+    Register<GoodFeaturesToTrackOp>();
+    Register<MatchTemplateOp>();
+
+    // 11. 图像增强与修复仿真 (Enhancement & Restoration)
     Register<BrightnessContrastOp>();
     Register<EqualizeHistOp>();
     Register<CLAHEOp>();
     Register<GammaCorrectionOp>();
     Register<InvertOp>();
     Register<SharpenOp>();
-    Register<BlendWithSourceOp>();
-
-    // 8. 轮廓分析
-    Register<FindContoursOp>();
-
-    // 9. 霍夫检测
-    Register<HoughLinesPOp>();
-    Register<HoughCirclesOp>();
-
-    // 10. 特征与匹配
-    Register<CornerHarrisOp>();
-    Register<GoodFeaturesToTrackOp>();
-    Register<MatchTemplateOp>();
+    Register<InpaintOp>();
+    Register<NoiseInjectionOp>();
 }
