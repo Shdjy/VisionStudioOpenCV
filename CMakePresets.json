@@ -8,21 +8,22 @@
     "configurePresets": [
         {
             "name": "qt-creator-mingw",
-            "displayName": "Qt Creator (MinGW 64-bit)",
+            "displayName": "Qt Creator (MinGW 6.8.2 64-bit)",
             "description": "Qt Creator MinGW 6.8.2 / OpenCV 4.9 默认预设配置",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build",
+            "binaryDir": "${sourceDir}/build/qt-mingw",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_PREFIX_PATH": "D:/Qt/6.8.2/mingw_64;D:/opencv4.9/build_mingw"
             }
         },
         {
-            "name": "vs-msvc-x64",
-            "displayName": "Visual Studio (MSVC x64)",
-            "description": "Visual Studio MSVC x64 默认预设配置",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build_msvc",
+            "name": "windows-vs2022",
+            "displayName": "Visual Studio 2022 (MSVC x64)",
+            "description": "Visual Studio 2022 IDE 默认构建目录",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/out/build/x64-Release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
@@ -34,8 +35,8 @@
             "configurePreset": "qt-creator-mingw"
         },
         {
-            "name": "vs-msvc-x64",
-            "configurePreset": "vs-msvc-x64"
+            "name": "windows-vs2022",
+            "configurePreset": "windows-vs2022"
         }
     ]
 }
