@@ -1,5 +1,6 @@
 #include "core/OpRegistry.h"
 #include "core/PipelineContext.h"
+#include "core/operators/ContourOps.h"
 #include "core/operators/FeatureOps.h"
 #include "core/operators/FilterOps.h"
 #include "core/operators/GeneralOps.h"
@@ -7,6 +8,8 @@
 #include "bll/PipelineManager.h"
 #include "bll/ProjectManager.h"
 #include "utils/ImageIoUtils.h"
+#include "utils/MatUtils.h"
+#include "utils/AppSettings.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QTemporaryDir>
@@ -229,6 +232,89 @@ void TestPipelineExceptionBoundary()
     Require(pipeline.GetStep(0)->HasError(), "throwing step has no error message");
     Require(pipeline.GetStep(1)->GetOutputCache().empty(), "downstream cache was not cleared after failure");
 }
+
+void TestMatUtilsColorIntegrity()
+{
+    // 构造 OpenCV 格式 BGR 图像：左半边纯红 (B=0,G=0,R=255)，右半边纯蓝 (B=255,G=0,R=0)
+    cv::Mat bgrMat(40, 40, CV_8UC3, cv::Scalar(0, 0, 255));
+    cv::rectangle(bgrMat, cv::Rect(20, 0, 20, 40), cv::Scalar(255, 0, 0), -1);
+
+    // 转换至 QImage
+    QImage qimg = MatUtils::MatToQImage(bgrMat);
+    Require(!qimg.isNull(), "MatToQImage returned null image");
+    Require(qimg.width() == 40 && qimg.height() == 40, "QImage dimension mismatch");
+
+    // 验证左半部红色区域 (Qt 中的 RGB 像素必须 Red=255, Blue=0, Green=0，严禁红蓝反转)
+    QColor redPixel = qimg.pixelColor(5, 20);
+    Require(redPixel.red() == 255 && redPixel.blue() == 0 && redPixel.green() == 0,
+            "MatToQImage red-blue inverted: red pixel showed Blue=" + std::to_string(redPixel.blue()) + ", Red=" + std::to_string(redPixel.red()));
+
+    // 验证右半部蓝色区域 (Qt 中的 RGB 像素必须 Blue=255, Red=0, Green=0)
+    QColor bluePixel = qimg.pixelColor(25, 20);
+    Require(bluePixel.blue() == 255 && bluePixel.red() == 0 && bluePixel.green() == 0,
+            "MatToQImage red-blue inverted: blue pixel showed Red=" + std::to_string(bluePixel.red()) + ", Blue=" + std::to_string(bluePixel.blue()));
+
+    // 验证从 QImage 还原回 cv::Mat
+    cv::Mat roundTrip = MatUtils::QImageToMat(qimg);
+    Require(!roundTrip.empty() && roundTrip.size() == bgrMat.size() && roundTrip.type() == bgrMat.type(),
+            "QImageToMat failed to recreate correct cv::Mat");
+    Require(cv::norm(bgrMat, roundTrip, cv::NORM_INF) == 0.0, "QImageToMat round-trip introduced pixel differences");
+}
+
+void TestContourVisibilityAndCanvasMode()
+{
+    std::string error;
+    // 构造白底黑目标的二值图 (模拟二值化后纯白前景/背景)
+    cv::Mat whiteBinary(100, 100, CV_8UC1, cv::Scalar(255));
+    cv::rectangle(whiteBinary, cv::Rect(25, 25, 50, 50), cv::Scalar(0), -1);
+
+    FindContoursOp op;
+    Require(op.SetParameter("minArea", 100.0), "failed to set minArea");
+    Require(op.SetParameter("thickness", 3), "failed to set line thickness");
+    Require(op.SetParameter("highContrast", true), "failed to enable high contrast outline");
+
+    // 1. 默认叠加模式
+    Require(op.SetParameter("canvasMode", 0), "failed to set canvasMode overlay");
+    cv::Mat outputOverlay;
+    Require(op.Process(whiteBinary, outputOverlay, error), "FindContoursOp overlay process failed: " + error);
+    Require(outputOverlay.type() == CV_8UC3 && outputOverlay.size() == whiteBinary.size(), "overlay output mismatch");
+
+    // 2. 纯黑画布模式
+    Require(op.SetParameter("canvasMode", 1), "failed to set canvasMode black canvas");
+    cv::Mat outputBlack;
+    Require(op.Process(whiteBinary, outputBlack, error), "FindContoursOp black canvas process failed: " + error);
+    Require(outputBlack.type() == CV_8UC3 && outputBlack.size() == whiteBinary.size(), "black canvas output mismatch");
+
+    // 3. 纯白画布模式
+    Require(op.SetParameter("canvasMode", 2), "failed to set canvasMode white canvas");
+    cv::Mat outputWhite;
+    Require(op.Process(whiteBinary, outputWhite, error), "FindContoursOp white canvas process failed: " + error);
+    Require(outputWhite.type() == CV_8UC3 && outputWhite.size() == whiteBinary.size(), "white canvas output mismatch");
+
+    // 验证代码生成
+    std::string cppCode = op.GenerateCppCode("srcMat", "dstMat");
+    Require(cppCode.find("lineThickness") != std::string::npos, "Cpp code missing lineThickness");
+    std::string pyCode = op.GeneratePythonCode("src_mat", "dst_mat");
+    Require(pyCode.find("line_thickness") != std::string::npos, "Python code missing line_thickness");
+}
+
+void TestAppSettingsPathPersistence()
+{
+    QTemporaryDir tempDir;
+    Require(tempDir.isValid(), "failed to create temporary dir for settings test");
+    const QString fakeFilePath = tempDir.filePath("test_sample_image.png");
+
+    // 1. 设置文件路径，应自动提取目录
+    AppSettings::SetLastDirectory(AppSettings::KeyImageDir, fakeFilePath);
+    QString retrievedDir = AppSettings::GetLastDirectory(AppSettings::KeyImageDir);
+    Require(!retrievedDir.isEmpty(), "AppSettings returned empty directory");
+    Require(QDir(retrievedDir).absolutePath() == QDir(tempDir.path()).absolutePath(),
+            "AppSettings did not store expected parent directory");
+
+    // 2. 获取默认拼接路径
+    QString defaultFilePath = AppSettings::GetDefaultFilePath(AppSettings::KeyImageDir, "result.png");
+    Require(defaultFilePath.endsWith("result.png"), "AppSettings GetDefaultFilePath returned unexpected filename");
+}
 }
 
 int main(int argc, char* argv[])
@@ -243,6 +329,9 @@ int main(int argc, char* argv[])
         TestUtf8ImageIo();
         TestProjectRoundTripAndTransactionalLoad();
         TestPipelineExceptionBoundary();
+        TestMatUtilsColorIntegrity();
+        TestContourVisibilityAndCanvasMode();
+        TestAppSettingsPathPersistence();
         std::cout << "All VisionStudio core tests passed." << std::endl;
         return 0;
     }

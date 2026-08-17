@@ -10,6 +10,7 @@
 #include "../utils/Logger.h"
 #include "../utils/ImageIoUtils.h"
 #include "../utils/IconUtils.h"
+#include "../utils/AppSettings.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QStyle>
@@ -363,11 +364,14 @@ void MainWindow::LoadDefaultTestImage()
 
 void MainWindow::OnOpenImage()
 {
-    QString filePath = QFileDialog::getOpenFileName(this, "打开图像文件", "", "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*.*)");
+    QString initialDir = AppSettings::GetLastDirectory(AppSettings::KeyImageDir);
+    QString filePath = QFileDialog::getOpenFileName(this, "打开图像文件", initialDir, "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*.*)");
     if (filePath.isEmpty())
     {
         return;
     }
+
+    AppSettings::SetLastDirectory(AppSettings::KeyImageDir, filePath);
 
     std::string ioError;
     cv::Mat img = ImageIoUtils::ReadImage(filePath.toUtf8().constData(), cv::IMREAD_COLOR, ioError);
@@ -396,11 +400,14 @@ void MainWindow::OnSaveImage()
         return;
     }
 
-    QString filePath = QFileDialog::getSaveFileName(this, "保存处理结果图像", "processed_result.png", "PNG Image (*.png);;JPEG Image (*.jpg);;BMP Image (*.bmp);;All Files (*.*)");
+    QString defaultPath = AppSettings::GetDefaultFilePath(AppSettings::KeyImageDir, "processed_result.png");
+    QString filePath = QFileDialog::getSaveFileName(this, "保存处理结果图像", defaultPath, "PNG Image (*.png);;JPEG Image (*.jpg);;BMP Image (*.bmp);;All Files (*.*)");
     if (filePath.isEmpty())
     {
         return;
     }
+
+    AppSettings::SetLastDirectory(AppSettings::KeyImageDir, filePath);
 
     std::string ioError;
     if (ImageIoUtils::WriteImage(filePath.toUtf8().constData(), outputMat, ioError))
@@ -417,11 +424,14 @@ void MainWindow::OnSaveImage()
 
 void MainWindow::OnImportProject()
 {
-    QString filePath = QFileDialog::getOpenFileName(this, "导入工程配置", "", "VisionStudio Project (*.json *.vsproj);;All Files (*.*)");
+    QString initialDir = AppSettings::GetLastDirectory(AppSettings::KeyProjectDir);
+    QString filePath = QFileDialog::getOpenFileName(this, "导入工程配置", initialDir, "VisionStudio Project (*.json *.vsproj);;All Files (*.*)");
     if (filePath.isEmpty())
     {
         return;
     }
+
+    AppSettings::SetLastDirectory(AppSettings::KeyProjectDir, filePath);
 
     QString err;
     if (ProjectManager::LoadProject(_pipelineManager, filePath, err))
@@ -444,11 +454,14 @@ void MainWindow::OnExportProject()
         return;
     }
 
-    QString filePath = QFileDialog::getSaveFileName(this, "导出工程配置", "pipeline_project.json", "VisionStudio Project (*.json *.vsproj);;All Files (*.*)");
+    QString defaultPath = AppSettings::GetDefaultFilePath(AppSettings::KeyProjectDir, "pipeline_project.json");
+    QString filePath = QFileDialog::getSaveFileName(this, "导出工程配置", defaultPath, "VisionStudio Project (*.json *.vsproj);;All Files (*.*)");
     if (filePath.isEmpty())
     {
         return;
     }
+
+    AppSettings::SetLastDirectory(AppSettings::KeyProjectDir, filePath);
 
     QString err;
     if (ProjectManager::SaveProject(_pipelineManager, filePath, err))

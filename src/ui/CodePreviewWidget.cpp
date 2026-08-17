@@ -6,6 +6,7 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QTextStream>
+#include "../utils/AppSettings.h"
 
 CodePreviewWidget::CodePreviewWidget(QWidget* parent)
     : QWidget(parent)
@@ -86,12 +87,15 @@ void CodePreviewWidget::OnExportClicked()
 
     QString filter = (_currentLanguageIndex == 0) ? "C++ Source File (*.cpp);;All Files (*.*)" : "Python Script (*.py);;All Files (*.*)";
     QString defaultName = (_currentLanguageIndex == 0) ? "pipeline_runner.cpp" : "pipeline_runner.py";
+    QString defaultPath = AppSettings::GetDefaultFilePath(AppSettings::KeyExportDir, defaultName);
 
-    QString filePath = QFileDialog::getSaveFileName(this, "导出代码文件", defaultName, filter);
+    QString filePath = QFileDialog::getSaveFileName(this, "导出代码文件", defaultPath, filter);
     if (filePath.isEmpty())
     {
         return;
     }
+
+    AppSettings::SetLastDirectory(AppSettings::KeyExportDir, filePath);
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))

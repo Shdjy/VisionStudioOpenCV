@@ -45,12 +45,13 @@ QImage MatUtils::MatToQImage(const cv::Mat& mat)
         }
         case CV_8UC3:
         {
-            // OpenCV 默认是 BGR，转换为 RGB 格式
+            // OpenCV 默认内存排布为 BGR，Qt 的 Format_BGR888 与之完全一致，直接安全深拷贝
             QImage image(mat.data, mat.cols, mat.rows, static_cast<int>(mat.step), QImage::Format_BGR888);
-            return image.rgbSwapped();
+            return image.copy();
         }
         case CV_8UC4:
         {
+            // OpenCV BGRA 在小端机器上对应 Qt 的 Format_ARGB32 (BGRA)
             QImage image(mat.data, mat.cols, mat.rows, static_cast<int>(mat.step), QImage::Format_ARGB32);
             return image.copy();
         }
@@ -75,7 +76,13 @@ QImage MatUtils::MatToQImage(const cv::Mat& mat)
             {
                 mat.convertTo(converted, CV_8UC3);
                 QImage image(converted.data, converted.cols, converted.rows, static_cast<int>(converted.step), QImage::Format_BGR888);
-                return image.rgbSwapped();
+                return image.copy();
+            }
+            else if (mat.channels() == 4)
+            {
+                mat.convertTo(converted, CV_8UC4);
+                QImage image(converted.data, converted.cols, converted.rows, static_cast<int>(converted.step), QImage::Format_ARGB32);
+                return image.copy();
             }
             break;
         }
@@ -99,6 +106,11 @@ cv::Mat MatUtils::QImageToMat(const QImage& image)
             cv::Mat mat(image.height(), image.width(), CV_8UC1, const_cast<uchar*>(image.bits()), static_cast<size_t>(image.bytesPerLine()));
             return mat.clone();
         }
+        case QImage::Format_BGR888:
+        {
+            cv::Mat mat(image.height(), image.width(), CV_8UC3, const_cast<uchar*>(image.bits()), static_cast<size_t>(image.bytesPerLine()));
+            return mat.clone();
+        }
         case QImage::Format_RGB888:
         {
             QImage swapped = image.rgbSwapped();
@@ -116,7 +128,7 @@ cv::Mat MatUtils::QImageToMat(const QImage& image)
         }
         default:
         {
-            QImage converted = image.convertToFormat(QImage::Format_RGB888).rgbSwapped();
+            QImage converted = image.convertToFormat(QImage::Format_BGR888);
             cv::Mat mat(converted.height(), converted.width(), CV_8UC3, const_cast<uchar*>(converted.bits()), static_cast<size_t>(converted.bytesPerLine()));
             return mat.clone();
         }

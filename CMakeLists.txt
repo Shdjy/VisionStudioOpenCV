@@ -116,6 +116,7 @@ set(UTILS_SOURCES
     src/utils/MatUtils.cpp
     src/utils/IconUtils.cpp
     src/utils/ImageIoUtils.cpp
+    src/utils/AppSettings.cpp
 )
 
 set(UI_SOURCES
@@ -296,6 +297,8 @@ if(BUILD_TESTING)
         ${CODEGEN_SOURCES}
         src/utils/Logger.cpp
         src/utils/ImageIoUtils.cpp
+        src/utils/MatUtils.cpp
+        src/utils/AppSettings.cpp
     )
     target_include_directories(VisionStudio_CoreTests PRIVATE
         src
@@ -307,6 +310,7 @@ if(BUILD_TESTING)
     )
     target_link_libraries(VisionStudio_CoreTests PRIVATE
         Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Gui
         ${OpenCV_LIBS}
     )
     if(TARGET opencv_objdetect)

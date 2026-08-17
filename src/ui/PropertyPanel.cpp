@@ -10,6 +10,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QFileDialog>
+#include "../utils/AppSettings.h"
 #include <QHBoxLayout>
 #include <QEvent>
 
@@ -340,14 +341,16 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
             if (!isPreview)
             {
                 connect(btnBrowse, &QPushButton::clicked, [this, lineEdit, paramName]() {
+                    QString initialDir = AppSettings::GetLastDirectory(AppSettings::KeyTemplateDir);
                     QString filePath = QFileDialog::getOpenFileName(
                         this,
                         "选择本地模板图像文件",
-                        QString(),
+                        initialDir,
                         "图像文件 (*.png *.jpg *.jpeg *.bmp *.tif *.webp);;所有文件 (*.*)"
                     );
                     if (!filePath.isEmpty())
                     {
+                        AppSettings::SetLastDirectory(AppSettings::KeyTemplateDir, filePath);
                         lineEdit->setText(filePath);
                         if (_pipelineMgr && _currentStepIndex >= 0)
                         {

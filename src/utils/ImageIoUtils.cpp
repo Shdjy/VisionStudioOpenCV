@@ -16,26 +16,34 @@ cv::Mat ImageIoUtils::ReadImage(const std::string& utf8Path, int flags, std::str
     try
     {
         const std::filesystem::path path = std::filesystem::u8path(utf8Path);
-        std::ifstream stream(path, std::ios::binary);
+        std::ifstream stream(path, std::ios::binary | std::ios::ate);
         if (!stream)
         {
-            errorMsg = "无法打开图像文件";
+            errorMsg = "无法打开图像文件: " + utf8Path;
             return cv::Mat();
         }
 
-        std::vector<unsigned char> bytes(
-            (std::istreambuf_iterator<char>(stream)),
-            std::istreambuf_iterator<char>());
-        if (bytes.empty())
+        const std::streamsize fileSize = stream.tellg();
+        if (fileSize <= 0)
         {
-            errorMsg = "图像文件为空";
+            errorMsg = "图像文件为空或大小为 0 字节";
+            return cv::Mat();
+        }
+
+        stream.seekg(0, std::ios::beg);
+
+        // 预分配内存进行高性能连续块读取 (大幅提升数十MB至GB级别线扫大图的载入吞吐率)
+        std::vector<unsigned char> bytes(static_cast<size_t>(fileSize));
+        if (!stream.read(reinterpret_cast<char*>(bytes.data()), fileSize))
+        {
+            errorMsg = "读取图像文件数据流失败";
             return cv::Mat();
         }
 
         cv::Mat image = cv::imdecode(bytes, flags);
         if (image.empty())
         {
-            errorMsg = "OpenCV 无法解码该图像格式";
+            errorMsg = "OpenCV 无法解码该图像格式，请检查文件完整性";
         }
         return image;
     }
