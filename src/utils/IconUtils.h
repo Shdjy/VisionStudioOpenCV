@@ -33,4 +33,20 @@ public:
      * @return 高清矢量 QIcon
      */
     static QIcon CreateRedCrossIcon(const QColor& color = QColor(235, 60, 60), int size = 64);
+
+    /**
+     * @brief 创建一键全选/全部启用图标 (带勾选框)
+     * @param color 图标前景色 (默认嫩绿 #4CAF50)
+     * @param size 渲染基准分辨率 (默认 64px)
+     * @return 高清矢量 QIcon
+     */
+    static QIcon CreateSelectAllIcon(const QColor& color = QColor(76, 175, 80), int size = 64);
+
+    /**
+     * @brief 创建一键取消/全部禁用图标 (空框或带斜杠方框)
+     * @param color 图标前景色 (默认浅灰 #B0B0B0)
+     * @param size 渲染基准分辨率 (默认 64px)
+     * @return 高清矢量 QIcon
+     */
+    static QIcon CreateDeselectAllIcon(const QColor& color = QColor(176, 176, 176), int size = 64);
 };

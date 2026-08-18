@@ -160,6 +160,8 @@ void MainWindow::InitUiAndDocks()
     ui->actionImportProject->setIcon(IconUtils::CreateImportIcon());
     ui->actionExportProject->setIcon(IconUtils::CreateExportIcon());
     ui->actionRunPipeline->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    ui->actionEnableAllSteps->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
+    ui->actionDisableAllSteps->setIcon(IconUtils::CreateDeselectAllIcon(QColor(180, 180, 180), 32));
     ui->actionClearPipeline->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
     ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_DesktopIcon));
     ui->actionAbout->setIcon(QIcon(":/icons/app_icon.png")); // 专属应用 Logo
@@ -292,6 +294,8 @@ void MainWindow::SetupConnections()
     connect(ui->actionImportProject, &QAction::triggered, this, &MainWindow::OnImportProject);
     connect(ui->actionExportProject, &QAction::triggered, this, &MainWindow::OnExportProject);
     connect(ui->actionRunPipeline, &QAction::triggered, this, &MainWindow::OnRunPipeline);
+    connect(ui->actionEnableAllSteps, &QAction::triggered, this, [this]() { _pipelineManager.SetAllStepsEnabled(true); });
+    connect(ui->actionDisableAllSteps, &QAction::triggered, this, [this]() { _pipelineManager.SetAllStepsEnabled(false); });
     connect(ui->actionClearPipeline, &QAction::triggered, this, &MainWindow::OnClearPipeline);
     connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::OnAbout);
     connect(ui->actionResetLayout, &QAction::triggered, this, &MainWindow::OnResetLayout);

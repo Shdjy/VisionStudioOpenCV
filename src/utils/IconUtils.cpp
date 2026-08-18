@@ -122,3 +122,53 @@ QIcon IconUtils::CreateRedCrossIcon(const QColor& color, int size)
 
     return QIcon(pixmap);
 }
+
+QIcon IconUtils::CreateSelectAllIcon(const QColor& color, int size)
+{
+    QPixmap pixmap(size, size);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // 绘制外方框
+    QPen boxPen(color, size * 0.08, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    painter.setPen(boxPen);
+    painter.setBrush(Qt::NoBrush);
+    qreal m = size * 0.16;
+    painter.drawRoundedRect(QRectF(m, m, size - 2 * m, size - 2 * m), size * 0.1, size * 0.1);
+
+    // 绘制内部醒目 Check 勾号
+    QPen checkPen(color, size * 0.12, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    painter.setPen(checkPen);
+    QPainterPath checkPath;
+    checkPath.moveTo(size * 0.28, size * 0.50);
+    checkPath.lineTo(size * 0.44, size * 0.68);
+    checkPath.lineTo(size * 0.74, size * 0.32);
+    painter.drawPath(checkPath);
+
+    return QIcon(pixmap);
+}
+
+QIcon IconUtils::CreateDeselectAllIcon(const QColor& color, int size)
+{
+    QPixmap pixmap(size, size);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // 绘制空外方框
+    QPen boxPen(color, size * 0.08, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    painter.setPen(boxPen);
+    painter.setBrush(Qt::NoBrush);
+    qreal m = size * 0.16;
+    painter.drawRoundedRect(QRectF(m, m, size - 2 * m, size - 2 * m), size * 0.1, size * 0.1);
+
+    // 绘制内部减号/横线表示取消
+    QPen dashPen(color, size * 0.10, Qt::SolidLine, Qt::RoundCap);
+    painter.setPen(dashPen);
+    painter.drawLine(QPointF(size * 0.32, size * 0.50), QPointF(size * 0.68, size * 0.50));
+
+    return QIcon(pixmap);
+}

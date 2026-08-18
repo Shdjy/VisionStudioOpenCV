@@ -5,6 +5,7 @@
 #include "core/operators/FilterOps.h"
 #include "core/operators/GeneralOps.h"
 #include "core/operators/IndustrialOps.h"
+#include "core/operators/InteractiveMaskOp.h"
 #include "bll/PipelineManager.h"
 #include "bll/ProjectManager.h"
 #include "utils/ImageIoUtils.h"
@@ -315,6 +316,67 @@ void TestAppSettingsPathPersistence()
     QString defaultFilePath = AppSettings::GetDefaultFilePath(AppSettings::KeyImageDir, "result.png");
     Require(defaultFilePath.endsWith("result.png"), "AppSettings GetDefaultFilePath returned unexpected filename");
 }
+
+void TestPipelineBulkEnableDisable()
+{
+    PipelineManager pipeline;
+    pipeline.SetSourceImage(cv::Mat(50, 50, CV_8UC1, cv::Scalar(128)));
+
+    auto op1 = std::make_unique<GaussianBlurOp>();
+    auto op2 = std::make_unique<NormalizeOp>();
+    pipeline.AddStep(std::move(op1));
+    pipeline.AddStep(std::move(op2));
+    Require(pipeline.GetStepCount() == 2, "pipeline step count mismatch");
+
+    // 一键取消全选/全部禁用
+    pipeline.SetAllStepsEnabled(false);
+    Require(!pipeline.GetStep(0)->IsEnabled(), "step 0 should be disabled");
+    Require(!pipeline.GetStep(1)->IsEnabled(), "step 1 should be disabled");
+
+    // 一键全选/全部启用
+    pipeline.SetAllStepsEnabled(true);
+    Require(pipeline.GetStep(0)->IsEnabled(), "step 0 should be enabled");
+    Require(pipeline.GetStep(1)->IsEnabled(), "step 1 should be enabled");
+}
+
+void TestInteractiveMaskMultipleShapes()
+{
+    cv::Mat input(120, 120, CV_8UC3, cv::Scalar(50, 50, 50));
+    std::string error;
+
+    // 1. 测试圆环 (Ring)
+    InteractiveMaskOp ringOp;
+    Require(ringOp.SetParameter("shape", static_cast<int>(MaskShape::Ring)), "failed to set shape to Ring");
+    Require(ringOp.SetParameter("roiX", 20), "failed to set roiX");
+    Require(ringOp.SetParameter("roiY", 20), "failed to set roiY");
+    Require(ringOp.SetParameter("roiW", 80), "failed to set roiW");
+    Require(ringOp.SetParameter("roiH", 80), "failed to set roiH");
+    Require(ringOp.SetParameter("innerRatio", 50), "failed to set innerRatio");
+    Require(ringOp.SetParameter("action", static_cast<int>(MaskAction::OutputMaskOnly)), "failed to set action OutputMaskOnly");
+
+    cv::Mat ringMask;
+    Require(ringOp.Process(input, ringMask, error), "Ring mask generation failed: " + error);
+    Require(!ringMask.empty() && ringMask.size() == input.size(), "Ring mask size mismatch");
+
+    // 2. 测试正六边形 (Regular Polygon 6 sides)
+    InteractiveMaskOp polyOp;
+    Require(polyOp.SetParameter("shape", static_cast<int>(MaskShape::RegularPolygon)), "failed to set shape to Polygon");
+    Require(polyOp.SetParameter("polySides", 6), "failed to set polySides to 6");
+    Require(polyOp.SetParameter("roiAngle", 30), "failed to set roiAngle to 30");
+
+    cv::Mat polyMask;
+    Require(polyOp.Process(input, polyMask, error), "Polygon mask generation failed: " + error);
+    Require(!polyMask.empty() && polyMask.size() == input.size(), "Polygon mask size mismatch");
+
+    // 3. 测试旋转矩形 (Rotated Rectangle)
+    InteractiveMaskOp rotOp;
+    Require(rotOp.SetParameter("shape", static_cast<int>(MaskShape::RotatedRect)), "failed to set shape to RotatedRect");
+    Require(rotOp.SetParameter("roiAngle", 45), "failed to set roiAngle to 45");
+
+    cv::Mat rotMask;
+    Require(rotOp.Process(input, rotMask, error), "Rotated rect mask generation failed: " + error);
+    Require(!rotMask.empty() && rotMask.size() == input.size(), "Rotated rect mask size mismatch");
+}
 }
 
 int main(int argc, char* argv[])
@@ -332,6 +394,8 @@ int main(int argc, char* argv[])
         TestMatUtilsColorIntegrity();
         TestContourVisibilityAndCanvasMode();
         TestAppSettingsPathPersistence();
+        TestPipelineBulkEnableDisable();
+        TestInteractiveMaskMultipleShapes();
         std::cout << "All VisionStudio core tests passed." << std::endl;
         return 0;
     }

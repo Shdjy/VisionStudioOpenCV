@@ -93,6 +93,31 @@ void PipelineManager::Clear()
     emit PipelineChanged();
 }
 
+void PipelineManager::SetAllStepsEnabled(bool enabled)
+{
+    if (_steps.empty())
+    {
+        return;
+    }
+
+    bool changed = false;
+    for (auto& step : _steps)
+    {
+        if (step->IsEnabled() != enabled)
+        {
+            step->SetEnabled(enabled);
+            changed = true;
+        }
+    }
+
+    if (changed)
+    {
+        MarkDirtyFrom(0);
+        Execute();
+        emit PipelineChanged();
+    }
+}
+
 PipelineStep* PipelineManager::GetStep(int index)
 {
     if (index >= 0 && index < static_cast<int>(_steps.size()))

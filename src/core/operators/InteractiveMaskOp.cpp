@@ -13,6 +13,9 @@ InteractiveMaskOp::InteractiveMaskOp()
     shapeParam.EnumOptions = {
         "矩形形状掩码 (Rectangle ROI)",
         "圆形/椭圆形状掩码 (Circle/Ellipse ROI)",
+        "圆环/椭圆环掩码 (Ring/Annulus ROI)",
+        "正多边形掩码 (Regular Polygon ROI)",
+        "旋转矩形掩码 (Rotated Rectangle ROI)",
         "原图亮度阈值自动掩码 (Threshold Auto Mask)"
     };
     _params.push_back(shapeParam);
@@ -50,7 +53,7 @@ InteractiveMaskOp::InteractiveMaskOp()
     // 3. ROI X
     OpParameter xParam;
     xParam.Name = "roiX";
-    xParam.DisplayName = "ROI 左上角 X (px)";
+    xParam.DisplayName = "ROI 中心/左上角 X (px)";
     xParam.Type = ParamType::IntSlider;
     xParam.Value = 50;
     xParam.MinValue = 0;
@@ -61,7 +64,7 @@ InteractiveMaskOp::InteractiveMaskOp()
     // 4. ROI Y
     OpParameter yParam;
     yParam.Name = "roiY";
-    yParam.DisplayName = "ROI 左上角 Y (px)";
+    yParam.DisplayName = "ROI 中心/左上角 Y (px)";
     yParam.Type = ParamType::IntSlider;
     yParam.Value = 50;
     yParam.MinValue = 0;
@@ -72,7 +75,7 @@ InteractiveMaskOp::InteractiveMaskOp()
     // 5. ROI Width
     OpParameter wParam;
     wParam.Name = "roiW";
-    wParam.DisplayName = "ROI 宽度 Width (px)";
+    wParam.DisplayName = "ROI 宽度/外径 Width (px)";
     wParam.Type = ParamType::IntSlider;
     wParam.Value = 200;
     wParam.MinValue = 10;
@@ -83,7 +86,7 @@ InteractiveMaskOp::InteractiveMaskOp()
     // 6. ROI Height
     OpParameter hParam;
     hParam.Name = "roiH";
-    hParam.DisplayName = "ROI 高度 Height (px)";
+    hParam.DisplayName = "ROI 高度/外径 Height (px)";
     hParam.Type = ParamType::IntSlider;
     hParam.Value = 150;
     hParam.MinValue = 10;
@@ -112,13 +115,46 @@ InteractiveMaskOp::InteractiveMaskOp()
     featherParam.MaxValue = 50;
     featherParam.Step = 2;
     _params.push_back(featherParam);
+
+    // 9. 正多边形边数
+    OpParameter polyParam;
+    polyParam.Name = "polySides";
+    polyParam.DisplayName = "正多边形边数 (Polygon Sides: 3~12)";
+    polyParam.Type = ParamType::IntSlider;
+    polyParam.Value = 6;
+    polyParam.MinValue = 3;
+    polyParam.MaxValue = 12;
+    polyParam.Step = 1;
+    _params.push_back(polyParam);
+
+    // 10. 圆环内径比例 (%)
+    OpParameter innerParam;
+    innerParam.Name = "innerRatio";
+    innerParam.DisplayName = "圆环内径占比 (Ring Inner Ratio %)";
+    innerParam.Type = ParamType::IntSlider;
+    innerParam.Value = 50;
+    innerParam.MinValue = 10;
+    innerParam.MaxValue = 90;
+    innerParam.Step = 5;
+    _params.push_back(innerParam);
+
+    // 11. 旋转角度 (deg)
+    OpParameter angleParam;
+    angleParam.Name = "roiAngle";
+    angleParam.DisplayName = "选区旋转角度 (Angle °)";
+    angleParam.Type = ParamType::IntSlider;
+    angleParam.Value = 0;
+    angleParam.MinValue = 0;
+    angleParam.MaxValue = 360;
+    angleParam.Step = 5;
+    _params.push_back(angleParam);
 }
 
 std::string InteractiveMaskOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：交互式掩码创建与局部作用 (Interactive Mask ROI)\n\n"
            "掩码（Mask）是工业机器视觉中控制算法计算区域的核心工具：\n"
-           "* **几何形状掩码**：在图像指定坐标 $[x, y, w, h]$ 生成矩形/椭圆 8 位单通道二进制矩阵；\n"
+           "* **几何形状掩码**：在图像指定坐标生成矩形、椭圆、圆环（带内径比例）、正多边形（3~12 边）或带角度旋转矩形的 8 位单通道二进制矩阵；\n"
            "* **阈值自动掩码**：基于当前图像灰度特征自动分离前景连通域；\n"
            "* **局部作用域运算**：仅对掩码白色像素覆盖的 ROI 区域执行局部滤波、锐化、增强或缺陷高亮标注，避免背景干扰。";
 }
@@ -154,6 +190,9 @@ bool InteractiveMaskOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
     int rh = _params[6].GetInt();
     int threshVal = _params[7].GetInt();
     int feather = _params[8].GetInt();
+    int polySides = (_params.size() > 9) ? _params[9].GetInt() : 6;
+    int innerRatio = (_params.size() > 10) ? _params[10].GetInt() : 50;
+    int angle = (_params.size() > 11) ? _params[11].GetInt() : 0;
 
     // 确定底图
     cv::Mat targetImg = input;
@@ -172,7 +211,7 @@ bool InteractiveMaskOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
         // 1. 生成单通道 0/255 掩码
         cv::Mat mask = cv::Mat::zeros(input.size(), CV_8UC1);
 
-        if (shape == 0) // 矩形
+        if (shape == 0) // 0: 矩形选区
         {
             cv::Rect roi(rx, ry, rw, rh);
             roi = roi & cv::Rect(0, 0, input.cols, input.rows);
@@ -181,13 +220,57 @@ bool InteractiveMaskOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
                 mask(roi).setTo(255);
             }
         }
-        else if (shape == 1) // 圆形/椭圆
+        else if (shape == 1) // 1: 圆形/椭圆选区
         {
             cv::Point center(rx + rw / 2, ry + rh / 2);
-            cv::Size axes(rw / 2, rh / 2);
-            cv::ellipse(mask, center, axes, 0, 0, 360, cv::Scalar(255), -1);
+            cv::Size axes(std::max(1, rw / 2), std::max(1, rh / 2));
+            cv::ellipse(mask, center, axes, static_cast<double>(angle), 0, 360, cv::Scalar(255), -1);
         }
-        else // 阈值自动
+        else if (shape == 2) // 2: 圆环/椭圆环选区 (Ring / Annulus)
+        {
+            cv::Point center(rx + rw / 2, ry + rh / 2);
+            cv::Size outerAxes(std::max(2, rw / 2), std::max(2, rh / 2));
+            int innerW = std::max(1, (rw / 2) * innerRatio / 100);
+            int innerH = std::max(1, (rh / 2) * innerRatio / 100);
+            cv::Size innerAxes(innerW, innerH);
+
+            cv::ellipse(mask, center, outerAxes, static_cast<double>(angle), 0, 360, cv::Scalar(255), -1);
+            cv::ellipse(mask, center, innerAxes, static_cast<double>(angle), 0, 360, cv::Scalar(0), -1);
+        }
+        else if (shape == 3) // 3: 正多边形选区 (Regular Polygon)
+        {
+            int n = std::max(3, polySides);
+            cv::Point2f center(rx + rw / 2.0f, ry + rh / 2.0f);
+            float radiusX = std::max(1.0f, rw / 2.0f);
+            float radiusY = std::max(1.0f, rh / 2.0f);
+            double baseRad = angle * CV_PI / 180.0 - CV_PI / 2.0;
+
+            std::vector<cv::Point> polyPts(n);
+            for (int k = 0; k < n; ++k)
+            {
+                double theta = baseRad + (2.0 * CV_PI * k) / n;
+                int px = static_cast<int>(std::round(center.x + radiusX * std::cos(theta)));
+                int py = static_cast<int>(std::round(center.y + radiusY * std::sin(theta)));
+                polyPts[k] = cv::Point(px, py);
+            }
+            std::vector<std::vector<cv::Point>> ptsList = { polyPts };
+            cv::fillPoly(mask, ptsList, cv::Scalar(255));
+        }
+        else if (shape == 4) // 4: 旋转矩形选区 (Rotated Rectangle)
+        {
+            cv::Point2f center(rx + rw / 2.0f, ry + rh / 2.0f);
+            cv::RotatedRect rRect(center, cv::Size2f(static_cast<float>(rw), static_cast<float>(rh)), static_cast<float>(angle));
+            cv::Point2f pts4[4];
+            rRect.points(pts4);
+            std::vector<cv::Point> ptsList(4);
+            for (int k = 0; k < 4; ++k)
+            {
+                ptsList[k] = cv::Point(static_cast<int>(std::round(pts4[k].x)), static_cast<int>(std::round(pts4[k].y)));
+            }
+            std::vector<std::vector<cv::Point>> polys = { ptsList };
+            cv::fillPoly(mask, polys, cv::Scalar(255));
+        }
+        else // 5: 阈值自动掩码
         {
             cv::Mat gray = input;
             if (input.channels() > 1) cv::cvtColor(input, gray, cv::COLOR_BGR2GRAY);
@@ -279,6 +362,9 @@ std::string InteractiveMaskOp::GenerateCppCode(const std::string& inVar, const s
     int ry = _params[4].GetInt();
     int rw = _params[5].GetInt();
     int rh = _params[6].GetInt();
+    int polySides = (_params.size() > 9) ? _params[9].GetInt() : 6;
+    int innerRatio = (_params.size() > 10) ? _params[10].GetInt() : 50;
+    int angle = (_params.size() > 11) ? _params[11].GetInt() : 0;
 
     std::stringstream ss;
     ss << "// 交互式掩码创建与局部作用运算\n"
@@ -290,7 +376,32 @@ std::string InteractiveMaskOp::GenerateCppCode(const std::string& inVar, const s
     }
     else if (shape == 1)
     {
-        ss << "cv::ellipse(mask, cv::Point(" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), cv::Size(" << (rw / 2) << ", " << (rh / 2) << "), 0, 0, 360, cv::Scalar(255), -1);\n";
+        ss << "cv::ellipse(mask, cv::Point(" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), cv::Size(" << (rw / 2) << ", " << (rh / 2) << "), " << angle << ", 0, 360, cv::Scalar(255), -1);\n";
+    }
+    else if (shape == 2)
+    {
+        ss << "cv::ellipse(mask, cv::Point(" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), cv::Size(" << (rw / 2) << ", " << (rh / 2) << "), " << angle << ", 0, 360, cv::Scalar(255), -1);\n"
+           << "cv::ellipse(mask, cv::Point(" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), cv::Size(" << ((rw / 2) * innerRatio / 100) << ", " << ((rh / 2) * innerRatio / 100) << "), " << angle << ", 0, 360, cv::Scalar(0), -1);\n";
+    }
+    else if (shape == 3)
+    {
+        ss << "// 正 " << polySides << " 边形掩码\n"
+           << "std::vector<cv::Point> polyPts;\n"
+           << "for (int k = 0; k < " << polySides << "; ++k) {\n"
+           << "    double th = (" << angle << " * 3.14159265 / 180.0 - 3.14159265 / 2.0) + (2.0 * 3.14159265 * k) / " << polySides << ";\n"
+           << "    polyPts.emplace_back(" << (rx + rw / 2) << " + " << (rw / 2) << " * cos(th), " << (ry + rh / 2) << " + " << (rh / 2) << " * sin(th));\n"
+           << "}\n"
+           << "std::vector<std::vector<cv::Point>> ptsList = { polyPts };\n"
+           << "cv::fillPoly(mask, ptsList, cv::Scalar(255));\n";
+    }
+    else if (shape == 4)
+    {
+        ss << "cv::RotatedRect rRect(cv::Point2f(" << (rx + rw / 2.0f) << "f, " << (ry + rh / 2.0f) << "f), cv::Size2f(" << rw << "f, " << rh << "f), " << angle << "f);\n"
+           << "cv::Point2f pts4[4]; rRect.points(pts4);\n"
+           << "std::vector<cv::Point> ptsList(4);\n"
+           << "for (int k = 0; k < 4; ++k) ptsList[k] = cv::Point(pts4[k].x, pts4[k].y);\n"
+           << "std::vector<std::vector<cv::Point>> polys = { ptsList };\n"
+           << "cv::fillPoly(mask, polys, cv::Scalar(255));\n";
     }
     else
     {
@@ -324,6 +435,9 @@ std::string InteractiveMaskOp::GeneratePythonCode(const std::string& inVar, cons
     int ry = _params[4].GetInt();
     int rw = _params[5].GetInt();
     int rh = _params[6].GetInt();
+    int polySides = (_params.size() > 9) ? _params[9].GetInt() : 6;
+    int innerRatio = (_params.size() > 10) ? _params[10].GetInt() : 50;
+    int angle = (_params.size() > 11) ? _params[11].GetInt() : 0;
 
     std::stringstream ss;
     ss << "# 交互式掩码创建与局部作用运算\n"
@@ -332,9 +446,26 @@ std::string InteractiveMaskOp::GeneratePythonCode(const std::string& inVar, cons
     {
         ss << "mask[" << ry << ":" << (ry + rh) << ", " << rx << ":" << (rx + rw) << "] = 255\n";
     }
+    else if (shape == 1)
+    {
+        ss << "cv2.ellipse(mask, (" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), (" << (rw / 2) << ", " << (rh / 2) << "), " << angle << ", 0, 360, 255, -1)\n";
+    }
+    else if (shape == 2)
+    {
+        ss << "cv2.ellipse(mask, (" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), (" << (rw / 2) << ", " << (rh / 2) << "), " << angle << ", 0, 360, 255, -1)\n"
+           << "cv2.ellipse(mask, (" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), (" << ((rw / 2) * innerRatio / 100) << ", " << ((rh / 2) * innerRatio / 100) << "), " << angle << ", 0, 360, 0, -1)\n";
+    }
+    else if (shape == 3)
+    {
+        ss << "poly_pts = []\n"
+           << "for k in range(" << polySides << "):\n"
+           << "    th = (" << angle << " * np.pi / 180.0 - np.pi / 2.0) + (2.0 * np.pi * k) / " << polySides << "\n"
+           << "    poly_pts.append([" << (rx + rw / 2) << " + " << (rw / 2) << " * np.cos(th), " << (ry + rh / 2) << " + " << (rh / 2) << " * np.sin(th)])\n"
+           << "cv2.fillPoly(mask, [np.array(poly_pts, dtype=np.int32)], 255)\n";
+    }
     else
     {
-        ss << "cv2.ellipse(mask, (" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), (" << (rw / 2) << ", " << (rh / 2) << "), 0, 0, 360, 255, -1)\n";
+        ss << "cv2.ellipse(mask, (" << (rx + rw / 2) << ", " << (ry + rh / 2) << "), (" << (rw / 2) << ", " << (rh / 2) << "), " << angle << ", 0, 360, 255, -1)\n";
     }
     ss << outVar << " = np.zeros_like(" << inVar << ")\n"
        << outVar << " = cv2.bitwise_and(" << inVar << ", " << inVar << ", mask=mask)";

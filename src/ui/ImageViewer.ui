@@ -31,6 +31,12 @@
    </property>
    <item>
     <widget class="QFrame" name="toolbarFrame">
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>36</height>
+      </size>
+     </property>
      <property name="frameShape">
       <enum>QFrame::StyledPanel</enum>
      </property>
@@ -39,13 +45,13 @@
        <number>6</number>
       </property>
       <property name="topMargin">
-       <number>4</number>
+       <number>2</number>
       </property>
       <property name="rightMargin">
        <number>6</number>
       </property>
       <property name="bottomMargin">
-       <number>4</number>
+       <number>2</number>
       </property>
       <item>
        <widget class="QToolButton" name="btnZoomIn">
@@ -138,14 +144,30 @@
         </item>
         <item>
          <property name="text">
-          <string>左右并排对比 (Side-by-Side)</string>
+          <string>左右独立对比 (Side-by-Side)</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>上下并排对比 (Top-Bottom)</string>
+          <string>上下独立对比 (Top-Bottom)</string>
          </property>
         </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="btnSyncViews">
+        <property name="toolTip">
+         <string>开启/关闭双图同步联动缩放与平移 (开启时协同移动，关闭时单张独立放大对比)</string>
+        </property>
+        <property name="text">
+         <string>🔗 同步联动</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
        </widget>
       </item>
       <item>
@@ -188,14 +210,137 @@
     </widget>
    </item>
    <item>
-    <widget class="QGraphicsView" name="graphicsView">
-     <property name="dragMode">
-      <enum>QGraphicsView::ScrollHandDrag</enum>
+    <widget class="QSplitter" name="viewSplitter">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>1</horstretch>
+       <verstretch>1</verstretch>
+      </sizepolicy>
      </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="handleWidth">
+      <number>6</number>
+     </property>
+     <widget class="QWidget" name="containerSource" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>1</horstretch>
+        <verstretch>1</verstretch>
+       </sizepolicy>
+      </property>
+      <layout class="QVBoxLayout" name="layoutSource">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="lblTitleSource">
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>24</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: #2d2d30; color: #4caf50; font-weight: bold; padding: 2px 6px; border-bottom: 1px solid #3e3e42;</string>
+         </property>
+         <property name="text">
+          <string>📷 原始输入图像 (Source Image)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGraphicsView" name="viewSource">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>1</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="dragMode">
+          <enum>QGraphicsView::ScrollHandDrag</enum>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="containerProcessed" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>1</horstretch>
+        <verstretch>1</verstretch>
+       </sizepolicy>
+      </property>
+      <layout class="QVBoxLayout" name="layoutProcessed">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="lblTitleProcessed">
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>24</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: #2d2d30; color: #5dade2; font-weight: bold; padding: 2px 6px; border-bottom: 1px solid #3e3e42;</string>
+         </property>
+         <property name="text">
+          <string>✨ 当前处理结果 (Processed Output)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGraphicsView" name="graphicsView">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>1</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="dragMode">
+          <enum>QGraphicsView::ScrollHandDrag</enum>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
     </widget>
    </item>
    <item>
     <widget class="QFrame" name="statusFrame">
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>26</height>
+      </size>
+     </property>
      <property name="frameShape">
       <enum>QFrame::StyledPanel</enum>
      </property>

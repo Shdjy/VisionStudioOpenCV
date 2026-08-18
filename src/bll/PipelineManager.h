@@ -54,6 +54,12 @@ public:
     void Clear();
 
     /**
+     * @brief 批量设置所有步骤的启用/禁用状态
+     * @param enabled 是否启用
+     */
+    void SetAllStepsEnabled(bool enabled);
+
+    /**
      * @brief 步骤数量
      */
     int GetStepCount() const { return static_cast<int>(_steps.size()); }

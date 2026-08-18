@@ -32,6 +32,8 @@ private slots:
     void OnMoveUpClicked();
     void OnMoveDownClicked();
     void OnRemoveClicked();
+    void OnSelectAllClicked();
+    void OnDeselectAllClicked();
     void OnRunClicked();
     void OnCurrentRowChanged(int row);
     void OnItemChanged(QListWidgetItem* item);

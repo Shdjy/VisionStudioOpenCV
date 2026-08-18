@@ -68,6 +68,32 @@
        </widget>
       </item>
       <item>
+       <widget class="QToolButton" name="btnSelectAll">
+        <property name="toolTip">
+         <string>一键全选/启用所有步骤 (Select All)</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonIconOnly</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="btnDeselectAll">
+        <property name="toolTip">
+         <string>一键取消/禁用所有步骤 (Deselect All)</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+        <property name="toolButtonStyle">
+         <enum>Qt::ToolButtonIconOnly</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QToolButton" name="btnClear">
         <property name="toolTip">
          <string>清空流水线所有步骤 (Clear)</string>

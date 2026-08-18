@@ -4,10 +4,12 @@
 
 enum class MaskShape
 {
-    Rectangle = 0,
-    Circle = 1,
-    Ellipse = 2,
-    ThresholdAuto = 3
+    Rectangle = 0,       // 矩形选区
+    Circle = 1,          // 圆形/椭圆选区
+    Ring = 2,            // 圆环/椭圆环选区
+    RegularPolygon = 3,  // 正多边形选区 (3~12边形)
+    RotatedRect = 4,     // 旋转矩形选区
+    ThresholdAuto = 5    // 原图亮度阈值自动掩码
 };
 
 enum class MaskAction

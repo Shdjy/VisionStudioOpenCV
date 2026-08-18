@@ -29,6 +29,16 @@ PipelineListWidget::PipelineListWidget(QWidget* parent)
     ui->btnRemove->setFixedSize(btnSize);
     ui->btnRemove->setToolTip("删除所选算子步骤 (Delete / 红色❌)");
 
+    ui->btnSelectAll->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
+    ui->btnSelectAll->setIconSize(btnIconSize);
+    ui->btnSelectAll->setFixedSize(btnSize);
+    ui->btnSelectAll->setToolTip("一键全选/启用所有流程步骤 (Select All)");
+
+    ui->btnDeselectAll->setIcon(IconUtils::CreateDeselectAllIcon(QColor(180, 180, 180), 32));
+    ui->btnDeselectAll->setIconSize(btnIconSize);
+    ui->btnDeselectAll->setFixedSize(btnSize);
+    ui->btnDeselectAll->setToolTip("一键取消/禁用所有流程步骤 (Deselect All)");
+
     ui->btnClear->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
     ui->btnClear->setIconSize(btnIconSize);
     ui->btnClear->setFixedSize(btnSize);
@@ -42,6 +52,8 @@ PipelineListWidget::PipelineListWidget(QWidget* parent)
     connect(ui->btnMoveUp, &QToolButton::clicked, this, &PipelineListWidget::OnMoveUpClicked);
     connect(ui->btnMoveDown, &QToolButton::clicked, this, &PipelineListWidget::OnMoveDownClicked);
     connect(ui->btnRemove, &QToolButton::clicked, this, &PipelineListWidget::OnRemoveClicked);
+    connect(ui->btnSelectAll, &QToolButton::clicked, this, &PipelineListWidget::OnSelectAllClicked);
+    connect(ui->btnDeselectAll, &QToolButton::clicked, this, &PipelineListWidget::OnDeselectAllClicked);
     connect(ui->btnClear, &QToolButton::clicked, this, &PipelineListWidget::OnClearClicked);
     connect(ui->btnRun, &QToolButton::clicked, this, &PipelineListWidget::OnRunClicked);
 
@@ -161,6 +173,22 @@ void PipelineListWidget::OnRemoveClicked()
     {
         _pipelineMgr->RemoveStep(row);
         _pipelineMgr->Execute();
+    }
+}
+
+void PipelineListWidget::OnSelectAllClicked()
+{
+    if (_pipelineMgr)
+    {
+        _pipelineMgr->SetAllStepsEnabled(true);
+    }
+}
+
+void PipelineListWidget::OnDeselectAllClicked()
+{
+    if (_pipelineMgr)
+    {
+        _pipelineMgr->SetAllStepsEnabled(false);
     }
 }
 

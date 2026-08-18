@@ -21,10 +21,18 @@ public:
 
     std::unique_ptr<InteractiveMaskOp> GetConfiguredOperator() const;
 
+public slots:
+    void ZoomIn();
+    void ZoomOut();
+    void ZoomFit();
+    void ZoomOriginal();
+
 protected:
+    void showEvent(QShowEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
+    void OnShapeChanged(int index);
     void OnParamChanged();
     void OnApplyClicked();
 
@@ -36,9 +44,15 @@ private:
     QGraphicsScene* _scene = nullptr;
     QGraphicsPixmapItem* _pixmapItem = nullptr;
 
+    double _scaleFactor = 1.0;
+    bool _isPanning = false;
+    QPoint _panStartPos;
+
     bool _isDrawing = false;
     QPoint _startPos;
     QRect _currentRoi;
 
     void UpdateDisplayPreview();
+    void UpdateZoomLabel();
+    void UpdateShapeControlsVisibility();
 };

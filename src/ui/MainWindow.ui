@@ -64,6 +64,9 @@
      <string>流水线 (&amp;P)</string>
     </property>
     <addaction name="actionRunPipeline"/>
+    <addaction name="actionEnableAllSteps"/>
+    <addaction name="actionDisableAllSteps"/>
+    <addaction name="separator"/>
     <addaction name="actionClearPipeline"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
@@ -185,6 +188,28 @@
    </property>
    <property name="statusTip">
     <string>移除流水线中的全部算法节点</string>
+   </property>
+  </action>
+  <action name="actionEnableAllSteps">
+   <property name="text">
+    <string>全部启用 (全选所有流程)</string>
+   </property>
+   <property name="toolTip">
+    <string>一键启用/全选流水线中所有流程步骤</string>
+   </property>
+   <property name="statusTip">
+    <string>将当前流水线中所有算子步骤批量置为启用状态并重新执行</string>
+   </property>
+  </action>
+  <action name="actionDisableAllSteps">
+   <property name="text">
+    <string>全部禁用 (一键取消)</string>
+   </property>
+   <property name="toolTip">
+    <string>一键禁用/取消流水线中所有流程步骤</string>
+   </property>
+   <property name="statusTip">
+    <string>将当前流水线中所有算子步骤批量置为禁用状态</string>
    </property>
   </action>
   <action name="actionAbout">

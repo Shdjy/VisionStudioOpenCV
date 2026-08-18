@@ -73,23 +73,36 @@ signals:
     void LineProfileUpdated(const LineProfileData& profileData);
 
 protected:
+    void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void OnCompareModeChanged(int index);
     void OnSplitSliderChanged(int value);
+    void OnSyncViewsToggled(bool checked);
 
 private:
     Ui::ImageViewer* ui;
+
+    // 处理图视口场景 (主视口)
     QGraphicsScene* _scene = nullptr;
     QGraphicsPixmapItem* _pixmapItem = nullptr;
+    double _scaleFactor = 1.0;
+
+    // 原图独立视口场景
+    QGraphicsScene* _sceneSource = nullptr;
+    QGraphicsPixmapItem* _pixmapItemSource = nullptr;
+    double _scaleFactorSource = 1.0;
 
     cv::Mat _currentProcessedMat;
     cv::Mat _currentOriginalMat;
 
-    double _scaleFactor = 1.0;
     ViewCompareMode _compareMode = ViewCompareMode::Single;
     int _splitPercent = 50;
+    bool _isSyncViews = false;
+    QGraphicsView* _lastActiveView = nullptr;
+    bool _isSyncing = false; // 防递归死循环
 
     // 测线剖面交互状态
     bool _isLineProfileMode = false;
@@ -107,7 +120,13 @@ private:
 
     void RenderDisplay();
     void UpdateZoomLabel();
-    void HandleMouseMove(const QPointF& scenePos);
+    void HandleMouseMove(QGraphicsView* view, const QPointF& scenePos);
     void UpdateProfileLineVisual();
     void CalculateAndEmitLineProfile();
+
+    void ZoomInView(QGraphicsView* view, double& scale);
+    void ZoomOutView(QGraphicsView* view, double& scale);
+    void ZoomFitView(QGraphicsView* view, QGraphicsPixmapItem* item, double& scale);
+    void ZoomOriginalView(QGraphicsView* view, double& scale);
+    void SyncViewportState(QGraphicsView* sourceView, QGraphicsView* targetView);
 };

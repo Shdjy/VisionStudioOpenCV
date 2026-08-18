@@ -3,6 +3,7 @@
 #include <QWheelEvent>
 #include <QMouseEvent>
 #include <QScrollBar>
+#include <QTimer>
 
 ImageViewer::ImageViewer(QWidget* parent)
     : QWidget(parent)
@@ -10,12 +11,28 @@ ImageViewer::ImageViewer(QWidget* parent)
 {
     ui->setupUi(this);
 
+    // 1. 设置主布局 Stretch，确保 viewSplitter 充满所有可用区域
+    ui->verticalLayout->setStretch(0, 0); // 顶部工具栏高度固定
+    ui->verticalLayout->setStretch(1, 1); // 视口 Splitter 占满全部剩余空间
+    ui->verticalLayout->setStretch(2, 0); // 底部状态栏高度固定
+
+    ui->viewSplitter->setChildrenCollapsible(false);
+    ui->viewSplitter->setStretchFactor(0, 1);
+    ui->viewSplitter->setStretchFactor(1, 1);
+
+    // 2. 初始化处理图视口场景 (主视口)
     _scene = new QGraphicsScene(this);
     _pixmapItem = new QGraphicsPixmapItem();
     _scene->addItem(_pixmapItem);
     ui->graphicsView->setScene(_scene);
 
-    // 初始化测线矢量图元 (置于顶层)
+    // 3. 初始化原图独立视口场景
+    _sceneSource = new QGraphicsScene(this);
+    _pixmapItemSource = new QGraphicsPixmapItem();
+    _sceneSource->addItem(_pixmapItemSource);
+    ui->viewSource->setScene(_sceneSource);
+
+    // 初始化测线矢量图元 (置于主处理图场景顶层)
     _profileLineItem = new QGraphicsPathItem();
     _profileLineItem->setZValue(100);
     _profileLineItem->setVisible(false);
@@ -43,12 +60,28 @@ ImageViewer::ImageViewer(QWidget* parent)
     _profileTextItem->setVisible(false);
     _scene->addItem(_profileTextItem);
 
+    // 视口抗锯齿与事件追踪
     ui->graphicsView->setRenderHint(QPainter::Antialiasing, true);
     ui->graphicsView->setRenderHint(QPainter::SmoothPixmapTransform, true);
     ui->graphicsView->viewport()->installEventFilter(this);
     ui->graphicsView->setMouseTracking(true);
 
+    ui->viewSource->setRenderHint(QPainter::Antialiasing, true);
+    ui->viewSource->setRenderHint(QPainter::SmoothPixmapTransform, true);
+    ui->viewSource->viewport()->installEventFilter(this);
+    ui->viewSource->setMouseTracking(true);
+
+    _lastActiveView = ui->graphicsView;
+
+    // 初始界面状态 (单图模式)
+    ui->containerSource->setVisible(false);
+    ui->lblTitleProcessed->setVisible(false);
     ui->sliderSplitPos->setVisible(false);
+    ui->btnSyncViews->setVisible(false);
+
+    // 默认开启同步联动
+    _isSyncViews = true;
+    ui->btnSyncViews->setChecked(true);
 
     connect(ui->btnZoomIn, &QToolButton::clicked, this, &ImageViewer::ZoomIn);
     connect(ui->btnZoomOut, &QToolButton::clicked, this, &ImageViewer::ZoomOut);
@@ -58,11 +91,63 @@ ImageViewer::ImageViewer(QWidget* parent)
 
     connect(ui->comboCompareMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ImageViewer::OnCompareModeChanged);
     connect(ui->sliderSplitPos, &QSlider::valueChanged, this, &ImageViewer::OnSplitSliderChanged);
+    connect(ui->btnSyncViews, &QToolButton::toggled, this, &ImageViewer::OnSyncViewsToggled);
+
+    // 监听滚动条联动同步
+    auto syncScrollbars = [this](QGraphicsView* from, QGraphicsView* to) {
+        if (!_isSyncViews || _isSyncing || !from || !to) return;
+        _isSyncing = true;
+        to->horizontalScrollBar()->setValue(from->horizontalScrollBar()->value());
+        to->verticalScrollBar()->setValue(from->verticalScrollBar()->value());
+        _isSyncing = false;
+    };
+
+    connect(ui->graphicsView->horizontalScrollBar(), &QScrollBar::valueChanged, this, [=]() {
+        syncScrollbars(ui->graphicsView, ui->viewSource);
+    });
+    connect(ui->graphicsView->verticalScrollBar(), &QScrollBar::valueChanged, this, [=]() {
+        syncScrollbars(ui->graphicsView, ui->viewSource);
+    });
+    connect(ui->viewSource->horizontalScrollBar(), &QScrollBar::valueChanged, this, [=]() {
+        syncScrollbars(ui->viewSource, ui->graphicsView);
+    });
+    connect(ui->viewSource->verticalScrollBar(), &QScrollBar::valueChanged, this, [=]() {
+        syncScrollbars(ui->viewSource, ui->graphicsView);
+    });
 }
 
 ImageViewer::~ImageViewer()
 {
     delete ui;
+}
+
+void ImageViewer::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    QTimer::singleShot(50, this, [this]() {
+        if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+        {
+            int total = (_compareMode == ViewCompareMode::SideBySide) ? ui->viewSplitter->width() : ui->viewSplitter->height();
+            if (total > 0)
+            {
+                ui->viewSplitter->setSizes({ total / 2, total / 2 });
+            }
+        }
+        ZoomFit();
+    });
+}
+
+void ImageViewer::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+    {
+        int total = (_compareMode == ViewCompareMode::SideBySide) ? ui->viewSplitter->width() : ui->viewSplitter->height();
+        if (total > 100)
+        {
+            ui->viewSplitter->setSizes({ total / 2, total / 2 });
+        }
+    }
 }
 
 void ImageViewer::SetImage(const cv::Mat& processedMat, const cv::Mat& originalMat)
@@ -100,7 +185,40 @@ void ImageViewer::OnCompareModeChanged(int index)
 {
     _compareMode = static_cast<ViewCompareMode>(index);
     ui->sliderSplitPos->setVisible(_compareMode == ViewCompareMode::SplitSlider);
+    ui->btnSyncViews->setVisible(_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom);
+
+    // 对比模式下默认开启同步联动
+    if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+    {
+        _isSyncViews = true;
+        ui->btnSyncViews->setChecked(true);
+    }
+
     RenderDisplay();
+
+    if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+    {
+        // 默认左右/上下各占 50%
+        int total = (_compareMode == ViewCompareMode::SideBySide) ? ui->viewSplitter->width() : ui->viewSplitter->height();
+        if (total <= 0)
+        {
+            total = (_compareMode == ViewCompareMode::SideBySide) ? 800 : 500;
+        }
+        ui->viewSplitter->setSizes({ total / 2, total / 2 });
+
+        QTimer::singleShot(50, this, [this]() {
+            int curTotal = (_compareMode == ViewCompareMode::SideBySide) ? ui->viewSplitter->width() : ui->viewSplitter->height();
+            if (curTotal > 0)
+            {
+                ui->viewSplitter->setSizes({ curTotal / 2, curTotal / 2 });
+            }
+            ZoomFit();
+            if (_isSyncViews)
+            {
+                SyncViewportState(ui->graphicsView, ui->viewSource);
+            }
+        });
+    }
 }
 
 void ImageViewer::OnSplitSliderChanged(int value)
@@ -112,20 +230,32 @@ void ImageViewer::OnSplitSliderChanged(int value)
     }
 }
 
+void ImageViewer::OnSyncViewsToggled(bool checked)
+{
+    _isSyncViews = checked;
+    if (_isSyncViews && (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom))
+    {
+        SyncViewportState(ui->graphicsView, ui->viewSource);
+    }
+}
+
 void ImageViewer::RenderDisplay()
 {
     if (_currentProcessedMat.empty())
     {
         _pixmapItem->setPixmap(QPixmap());
+        if (_pixmapItemSource) _pixmapItemSource->setPixmap(QPixmap());
         return;
     }
-
-    cv::Mat displayMat;
 
     if (_compareMode == ViewCompareMode::SplitSlider && !_currentOriginalMat.empty() &&
         _currentOriginalMat.size() == _currentProcessedMat.size())
     {
-        // 1. 卷帘分屏模式
+        // 1. 卷帘分屏模式 (单视口混合)
+        ui->containerSource->setVisible(false);
+        ui->containerProcessed->setVisible(true);
+        ui->lblTitleProcessed->setVisible(false);
+
         cv::Mat origBGR, procBGR;
         if (_currentOriginalMat.channels() == 1) cv::cvtColor(_currentOriginalMat, origBGR, cv::COLOR_GRAY2BGR);
         else origBGR = _currentOriginalMat;
@@ -133,7 +263,7 @@ void ImageViewer::RenderDisplay()
         if (_currentProcessedMat.channels() == 1) cv::cvtColor(_currentProcessedMat, procBGR, cv::COLOR_GRAY2BGR);
         else procBGR = _currentProcessedMat;
 
-        displayMat = procBGR.clone();
+        cv::Mat displayMat = procBGR.clone();
         int splitCol = (procBGR.cols * _splitPercent) / 100;
         if (splitCol > 0 && splitCol < procBGR.cols)
         {
@@ -141,147 +271,225 @@ void ImageViewer::RenderDisplay()
             origBGR(leftRoi).copyTo(displayMat(leftRoi));
             cv::line(displayMat, cv::Point(splitCol, 0), cv::Point(splitCol, procBGR.rows), cv::Scalar(0, 255, 255), 2);
         }
+
+        QImage qimg = MatUtils::MatToQImage(displayMat);
+        _pixmapItem->setPixmap(QPixmap::fromImage(qimg));
+        _scene->setSceneRect(_pixmapItem->boundingRect());
     }
-    else if (_compareMode == ViewCompareMode::SideBySide && !_currentOriginalMat.empty())
+    else if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
     {
-        // 2. 左右并排对比模式
-        cv::Mat origBGR, procBGR;
-        if (_currentOriginalMat.channels() == 1) cv::cvtColor(_currentOriginalMat, origBGR, cv::COLOR_GRAY2BGR);
-        else origBGR = _currentOriginalMat;
+        // 2 & 3. 左右/上下 独立双视口模式
+        ui->viewSplitter->setOrientation((_compareMode == ViewCompareMode::SideBySide) ? Qt::Horizontal : Qt::Vertical);
+        ui->containerSource->setVisible(true);
+        ui->containerProcessed->setVisible(true);
+        ui->lblTitleSource->setVisible(true);
+        ui->lblTitleProcessed->setVisible(true);
 
-        if (_currentProcessedMat.channels() == 1) cv::cvtColor(_currentProcessedMat, procBGR, cv::COLOR_GRAY2BGR);
-        else procBGR = _currentProcessedMat;
+        // 渲染左侧原图
+        if (!_currentOriginalMat.empty())
+        {
+            QImage origQImg = MatUtils::MatToQImage(_currentOriginalMat);
+            _pixmapItemSource->setPixmap(QPixmap::fromImage(origQImg));
+            _sceneSource->setSceneRect(_pixmapItemSource->boundingRect());
+        }
 
-        int headerH = 26;
-        int gap = 16;
-        int maxH = std::max(origBGR.rows, procBGR.rows);
-        int totalW = origBGR.cols + procBGR.cols + gap;
-        int totalH = maxH + headerH;
-
-        displayMat = cv::Mat(totalH, totalW, CV_8UC3, cv::Scalar(32, 32, 35));
-
-        // 绘制标题
-        cv::putText(displayMat, "Source Image", cv::Point(10, 18), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 255, 128), 1, cv::LINE_AA);
-        cv::putText(displayMat, "Processed Output", cv::Point(origBGR.cols + gap + 10, 18), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(255, 180, 50), 1, cv::LINE_AA);
-
-        // 放置原图与处理图
-        cv::Rect r1(0, headerH, origBGR.cols, origBGR.rows);
-        origBGR.copyTo(displayMat(r1));
-
-        cv::Rect r2(origBGR.cols + gap, headerH, procBGR.cols, procBGR.rows);
-        procBGR.copyTo(displayMat(r2));
-
-        // 分割线
-        int sepX = origBGR.cols + gap / 2;
-        cv::line(displayMat, cv::Point(sepX, 0), cv::Point(sepX, totalH), cv::Scalar(60, 60, 65), 2);
-    }
-    else if (_compareMode == ViewCompareMode::TopBottom && !_currentOriginalMat.empty())
-    {
-        // 3. 上下并排对比模式
-        cv::Mat origBGR, procBGR;
-        if (_currentOriginalMat.channels() == 1) cv::cvtColor(_currentOriginalMat, origBGR, cv::COLOR_GRAY2BGR);
-        else origBGR = _currentOriginalMat;
-
-        if (_currentProcessedMat.channels() == 1) cv::cvtColor(_currentProcessedMat, procBGR, cv::COLOR_GRAY2BGR);
-        else procBGR = _currentProcessedMat;
-
-        int headerH = 24;
-        int gap = 16;
-        int maxW = std::max(origBGR.cols, procBGR.cols);
-        int totalH = origBGR.rows + procBGR.rows + headerH * 2 + gap;
-
-        displayMat = cv::Mat(totalH, maxW, CV_8UC3, cv::Scalar(32, 32, 35));
-
-        // 绘制上方原图
-        cv::putText(displayMat, "Source Image", cv::Point(10, 16), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(0, 255, 128), 1, cv::LINE_AA);
-        cv::Rect r1(0, headerH, origBGR.cols, origBGR.rows);
-        origBGR.copyTo(displayMat(r1));
-
-        // 绘制下方处理图
-        int procTop = headerH + origBGR.rows + gap;
-        cv::putText(displayMat, "Processed Output", cv::Point(10, procTop + 16), cv::FONT_HERSHEY_SIMPLEX, 0.55, cv::Scalar(255, 180, 50), 1, cv::LINE_AA);
-        cv::Rect r2(0, procTop + headerH, procBGR.cols, procBGR.rows);
-        procBGR.copyTo(displayMat(r2));
-
-        // 分割线
-        int sepY = headerH + origBGR.rows + gap / 2;
-        cv::line(displayMat, cv::Point(0, sepY), cv::Point(maxW, sepY), cv::Scalar(60, 60, 65), 2);
+        // 渲染右侧处理图
+        QImage procQImg = MatUtils::MatToQImage(_currentProcessedMat);
+        _pixmapItem->setPixmap(QPixmap::fromImage(procQImg));
+        _scene->setSceneRect(_pixmapItem->boundingRect());
     }
     else
     {
         // 4. 单图标准显示模式
-        displayMat = _currentProcessedMat;
-    }
+        ui->containerSource->setVisible(false);
+        ui->containerProcessed->setVisible(true);
+        ui->lblTitleProcessed->setVisible(false);
 
-    QImage qimg = MatUtils::MatToQImage(displayMat);
-    _pixmapItem->setPixmap(QPixmap::fromImage(qimg));
-    _scene->setSceneRect(_pixmapItem->boundingRect());
+        QImage qimg = MatUtils::MatToQImage(_currentProcessedMat);
+        _pixmapItem->setPixmap(QPixmap::fromImage(qimg));
+        _scene->setSceneRect(_pixmapItem->boundingRect());
+    }
+}
+
+void ImageViewer::ZoomInView(QGraphicsView* view, double& scale)
+{
+    if (!view) return;
+    scale *= 1.25;
+    view->scale(1.25, 1.25);
+    UpdateZoomLabel();
+}
+
+void ImageViewer::ZoomOutView(QGraphicsView* view, double& scale)
+{
+    if (!view) return;
+    scale *= 0.8;
+    view->scale(0.8, 0.8);
+    UpdateZoomLabel();
+}
+
+void ImageViewer::ZoomFitView(QGraphicsView* view, QGraphicsPixmapItem* item, double& scale)
+{
+    if (!view || !item || item->pixmap().isNull()) return;
+    view->setSceneRect(item->boundingRect());
+    view->fitInView(item, Qt::KeepAspectRatio);
+    scale = view->transform().m11();
+    UpdateZoomLabel();
+}
+
+void ImageViewer::ZoomOriginalView(QGraphicsView* view, double& scale)
+{
+    if (!view) return;
+    view->resetTransform();
+    scale = 1.0;
+    UpdateZoomLabel();
+}
+
+void ImageViewer::SyncViewportState(QGraphicsView* sourceView, QGraphicsView* targetView)
+{
+    if (!sourceView || !targetView || _isSyncing) return;
+    _isSyncing = true;
+    targetView->setTransform(sourceView->transform());
+    targetView->horizontalScrollBar()->setValue(sourceView->horizontalScrollBar()->value());
+    targetView->verticalScrollBar()->setValue(sourceView->verticalScrollBar()->value());
+    _scaleFactorSource = sourceView->transform().m11();
+    _scaleFactor = _scaleFactorSource;
+    UpdateZoomLabel();
+    _isSyncing = false;
 }
 
 void ImageViewer::ZoomIn()
 {
-    _scaleFactor *= 1.25;
-    ui->graphicsView->scale(1.25, 1.25);
-    UpdateZoomLabel();
+    if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+    {
+        if (_isSyncViews)
+        {
+            ZoomInView(ui->graphicsView, _scaleFactor);
+            SyncViewportState(ui->graphicsView, ui->viewSource);
+        }
+        else if (_lastActiveView == ui->viewSource)
+        {
+            ZoomInView(ui->viewSource, _scaleFactorSource);
+        }
+        else
+        {
+            ZoomInView(ui->graphicsView, _scaleFactor);
+        }
+    }
+    else
+    {
+        ZoomInView(ui->graphicsView, _scaleFactor);
+    }
 }
 
 void ImageViewer::ZoomOut()
 {
-    _scaleFactor *= 0.8;
-    ui->graphicsView->scale(0.8, 0.8);
-    UpdateZoomLabel();
+    if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+    {
+        if (_isSyncViews)
+        {
+            ZoomOutView(ui->graphicsView, _scaleFactor);
+            SyncViewportState(ui->graphicsView, ui->viewSource);
+        }
+        else if (_lastActiveView == ui->viewSource)
+        {
+            ZoomOutView(ui->viewSource, _scaleFactorSource);
+        }
+        else
+        {
+            ZoomOutView(ui->graphicsView, _scaleFactor);
+        }
+    }
+    else
+    {
+        ZoomOutView(ui->graphicsView, _scaleFactor);
+    }
 }
 
 void ImageViewer::ZoomFit()
 {
-    if (_pixmapItem->pixmap().isNull())
+    if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
     {
-        return;
+        ZoomFitView(ui->viewSource, _pixmapItemSource, _scaleFactorSource);
+        ZoomFitView(ui->graphicsView, _pixmapItem, _scaleFactor);
+        if (_isSyncViews)
+        {
+            SyncViewportState(ui->graphicsView, ui->viewSource);
+        }
     }
-
-    ui->graphicsView->fitInView(_pixmapItem, Qt::KeepAspectRatio);
-    _scaleFactor = ui->graphicsView->transform().m11();
-    UpdateZoomLabel();
+    else
+    {
+        ZoomFitView(ui->graphicsView, _pixmapItem, _scaleFactor);
+    }
 }
 
 void ImageViewer::ZoomOriginal()
 {
-    ui->graphicsView->resetTransform();
-    _scaleFactor = 1.0;
-    UpdateZoomLabel();
+    if (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+    {
+        ZoomOriginalView(ui->viewSource, _scaleFactorSource);
+        ZoomOriginalView(ui->graphicsView, _scaleFactor);
+    }
+    else
+    {
+        ZoomOriginalView(ui->graphicsView, _scaleFactor);
+    }
 }
 
 void ImageViewer::UpdateZoomLabel()
 {
-    int percent = static_cast<int>(_scaleFactor * 100);
+    double curScale = (_lastActiveView == ui->viewSource) ? _scaleFactorSource : _scaleFactor;
+    int percent = static_cast<int>(curScale * 100);
     ui->lblZoomPercent->setText(QString("%1%").arg(percent));
 }
 
 bool ImageViewer::eventFilter(QObject* watched, QEvent* event)
 {
+    QGraphicsView* targetView = nullptr;
+    QGraphicsView* otherView = nullptr;
+    double* targetScale = nullptr;
+
     if (watched == ui->graphicsView->viewport())
+    {
+        targetView = ui->graphicsView;
+        otherView = ui->viewSource;
+        targetScale = &_scaleFactor;
+        _lastActiveView = ui->graphicsView;
+    }
+    else if (watched == ui->viewSource->viewport())
+    {
+        targetView = ui->viewSource;
+        otherView = ui->graphicsView;
+        targetScale = &_scaleFactorSource;
+        _lastActiveView = ui->viewSource;
+    }
+
+    if (targetView)
     {
         if (event->type() == QEvent::Wheel)
         {
             auto* wheelEvent = static_cast<QWheelEvent*>(event);
             if (wheelEvent->angleDelta().y() > 0)
             {
-                ZoomIn();
+                ZoomInView(targetView, *targetScale);
             }
             else
             {
-                ZoomOut();
+                ZoomOutView(targetView, *targetScale);
+            }
+
+            if (_isSyncViews && otherView && (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom))
+            {
+                SyncViewportState(targetView, otherView);
             }
             return true;
         }
         else if (event->type() == QEvent::MouseButtonPress)
         {
             auto* mouseEvent = static_cast<QMouseEvent*>(event);
-            if (_isLineProfileMode && mouseEvent->button() == Qt::LeftButton)
+            if (targetView == ui->graphicsView && _isLineProfileMode && mouseEvent->button() == Qt::LeftButton)
             {
-                QPointF scenePos = ui->graphicsView->mapToScene(mouseEvent->pos());
+                QPointF scenePos = targetView->mapToScene(mouseEvent->pos());
                 
-                // 检查是否点中现有端点
                 if (_hasValidProfileLine)
                 {
                     double distStart = QLineF(scenePos, _profileStartPt).length();
@@ -298,7 +506,6 @@ bool ImageViewer::eventFilter(QObject* watched, QEvent* event)
                     }
                 }
 
-                // 重新开始拉新测线
                 _isDrawingLine = true;
                 _dragHandle = 2;
                 _profileStartPt = scenePos;
@@ -311,9 +518,9 @@ bool ImageViewer::eventFilter(QObject* watched, QEvent* event)
         else if (event->type() == QEvent::MouseMove)
         {
             auto* mouseEvent = static_cast<QMouseEvent*>(event);
-            QPointF scenePos = ui->graphicsView->mapToScene(mouseEvent->pos());
+            QPointF scenePos = targetView->mapToScene(mouseEvent->pos());
 
-            if (_isLineProfileMode)
+            if (targetView == ui->graphicsView && _isLineProfileMode)
             {
                 if (_isDrawingLine || _dragHandle != 0)
                 {
@@ -331,12 +538,12 @@ bool ImageViewer::eventFilter(QObject* watched, QEvent* event)
                 }
             }
 
-            HandleMouseMove(scenePos);
+            HandleMouseMove(targetView, scenePos);
         }
         else if (event->type() == QEvent::MouseButtonRelease)
         {
             auto* mouseEvent = static_cast<QMouseEvent*>(event);
-            if (_isLineProfileMode && mouseEvent->button() == Qt::LeftButton)
+            if (targetView == ui->graphicsView && _isLineProfileMode && mouseEvent->button() == Qt::LeftButton)
             {
                 if (_isDrawingLine || _dragHandle != 0)
                 {
@@ -349,6 +556,7 @@ bool ImageViewer::eventFilter(QObject* watched, QEvent* event)
             }
         }
     }
+
     return QWidget::eventFilter(watched, event);
 }
 
@@ -515,77 +723,39 @@ void ImageViewer::CalculateAndEmitLineProfile()
     emit LineProfileUpdated(data);
 }
 
-void ImageViewer::HandleMouseMove(const QPointF& scenePos)
+void ImageViewer::HandleMouseMove(QGraphicsView* view, const QPointF& scenePos)
 {
-    if (_currentProcessedMat.empty())
-    {
-        return;
-    }
+    if (!view) return;
 
     int x = static_cast<int>(scenePos.x());
     int y = static_cast<int>(scenePos.y());
 
-    if (_compareMode == ViewCompareMode::Single || _compareMode == ViewCompareMode::SplitSlider)
+    if (view == ui->viewSource)
     {
-        if (x >= 0 && x < _currentProcessedMat.cols && y >= 0 && y < _currentProcessedMat.rows)
+        if (!_currentOriginalMat.empty() && x >= 0 && x < _currentOriginalMat.cols && y >= 0 && y < _currentOriginalMat.rows)
+        {
+            PixelProbeInfo probe = MatUtils::GetPixelInfo(_currentOriginalMat, x, y);
+            ui->lblPixelProbe->setText(QString("探针 [原图]: %1").arg(QString::fromStdString(probe.FormattedText)));
+        }
+        else
+        {
+            ui->lblPixelProbe->setText("探针 [原图]: 超出图像边界");
+        }
+    }
+    else
+    {
+        if (!_currentProcessedMat.empty() && x >= 0 && x < _currentProcessedMat.cols && y >= 0 && y < _currentProcessedMat.rows)
         {
             PixelProbeInfo probe = MatUtils::GetPixelInfo(_currentProcessedMat, x, y);
             emit PixelHovered(probe);
-            ui->lblPixelProbe->setText(QString("探针: %1").arg(QString::fromStdString(probe.FormattedText)));
+            QString prefix = (_compareMode == ViewCompareMode::SideBySide || _compareMode == ViewCompareMode::TopBottom)
+                                 ? "探针 [处理图]: "
+                                 : "探针: ";
+            ui->lblPixelProbe->setText(prefix + QString::fromStdString(probe.FormattedText));
         }
         else
         {
             ui->lblPixelProbe->setText("探针: 超出图像边界");
-        }
-    }
-    else if (_compareMode == ViewCompareMode::SideBySide)
-    {
-        int headerH = 26;
-        int gap = 16;
-        int imgY = y - headerH;
-
-        if (imgY >= 0 && imgY < _currentProcessedMat.rows)
-        {
-            if (x >= 0 && x < _currentOriginalMat.cols && !_currentOriginalMat.empty())
-            {
-                PixelProbeInfo probe = MatUtils::GetPixelInfo(_currentOriginalMat, x, imgY);
-                ui->lblPixelProbe->setText(QString("探针 [原图]: %1").arg(QString::fromStdString(probe.FormattedText)));
-            }
-            else if (x >= _currentOriginalMat.cols + gap && x < _currentOriginalMat.cols + gap + _currentProcessedMat.cols)
-            {
-                int procX = x - (_currentOriginalMat.cols + gap);
-                PixelProbeInfo probe = MatUtils::GetPixelInfo(_currentProcessedMat, procX, imgY);
-                ui->lblPixelProbe->setText(QString("探针 [处理图]: %1").arg(QString::fromStdString(probe.FormattedText)));
-            }
-            else
-            {
-                ui->lblPixelProbe->setText("探针: 位于分割区域");
-            }
-        }
-    }
-    else if (_compareMode == ViewCompareMode::TopBottom)
-    {
-        int headerH = 24;
-        int gap = 16;
-
-        if (x >= 0 && x < _currentProcessedMat.cols)
-        {
-            if (y >= headerH && y < headerH + _currentOriginalMat.rows && !_currentOriginalMat.empty())
-            {
-                int origY = y - headerH;
-                PixelProbeInfo probe = MatUtils::GetPixelInfo(_currentOriginalMat, x, origY);
-                ui->lblPixelProbe->setText(QString("探针 [原图]: %1").arg(QString::fromStdString(probe.FormattedText)));
-            }
-            else
-            {
-                int procTop = headerH + _currentOriginalMat.rows + gap + headerH;
-                if (y >= procTop && y < procTop + _currentProcessedMat.rows)
-                {
-                    int procY = y - procTop;
-                    PixelProbeInfo probe = MatUtils::GetPixelInfo(_currentProcessedMat, x, procY);
-                    ui->lblPixelProbe->setText(QString("探针 [处理图]: %1").arg(QString::fromStdString(probe.FormattedText)));
-                }
-            }
         }
     }
 }
