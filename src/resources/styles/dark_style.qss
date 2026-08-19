@@ -132,7 +132,7 @@ QGroupBox::title {
     padding: 0 4px;
 }
 
-QLineEdit, QPlainTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox, QComboBox {
+QLineEdit, QPlainTextEdit, QTextBrowser, QComboBox {
     background-color: #1e1e1e;
     color: #d4d4d4;
     border: 1px solid #3e3e42;
@@ -141,8 +141,92 @@ QLineEdit, QPlainTextEdit, QTextBrowser, QSpinBox, QDoubleSpinBox, QComboBox {
     selection-background-color: #264f78;
 }
 
-QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus {
     border: 1px solid #007acc;
+}
+
+/* ==================== QSpinBox & QDoubleSpinBox 微调框专属样式 ==================== */
+QSpinBox, QDoubleSpinBox {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border: 1px solid #3e3e42;
+    border-radius: 3px;
+    padding: 2px 22px 2px 6px; /* 右侧预留 22px 空间，防止数字被微调按钮覆盖 */
+    min-height: 24px;
+    selection-background-color: #264f78;
+}
+
+QSpinBox:focus, QDoubleSpinBox:focus {
+    border: 1px solid #007acc;
+}
+
+/* 上微调按钮 (右上区域) */
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    height: 12px;
+    background-color: #2b2b2b;
+    border-left: 1px solid #3e3e42;
+    border-bottom: 1px solid #3e3e42;
+    border-top-right-radius: 3px;
+}
+
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {
+    background-color: #007acc;
+    border-color: #007acc;
+}
+
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed {
+    background-color: #094771;
+}
+
+/* 下微调按钮 (右下区域) */
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    height: 12px;
+    background-color: #2b2b2b;
+    border-left: 1px solid #3e3e42;
+    border-bottom-right-radius: 3px;
+}
+
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+    background-color: #007acc;
+    border-color: #007acc;
+}
+
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
+    background-color: #094771;
+}
+
+/* 上三角箭头 */
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    width: 0px;
+    height: 0px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #d4d4d4;
+    margin-right: 1px;
+}
+
+QSpinBox::up-arrow:hover, QDoubleSpinBox::up-arrow:hover {
+    border-bottom: 5px solid #ffffff;
+}
+
+/* 下三角箭头 */
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    width: 0px;
+    height: 0px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #d4d4d4;
+    margin-right: 1px;
+}
+
+QSpinBox::down-arrow:hover, QDoubleSpinBox::down-arrow:hover {
+    border-top: 5px solid #ffffff;
 }
 
 QPushButton {

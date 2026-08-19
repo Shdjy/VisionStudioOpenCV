@@ -42,9 +42,15 @@ PropertyPanel::~PropertyPanel()
 
 bool PropertyPanel::eventFilter(QObject* watched, QEvent* event)
 {
-    // 拦截参数调节控件上的滚轮事件，防止误触，使滚轮专用于滚动整个页面
+    // 拦截参数调节控件上的滚轮事件，防止滚动页面时误触；
+    // 但若微调输入框已获得焦点，则允许通过滚轮顺畅微调
     if (event->type() == QEvent::Wheel)
     {
+        auto* spin = qobject_cast<QAbstractSpinBox*>(watched);
+        if (spin && spin->hasFocus())
+        {
+            return false;
+        }
         event->ignore();
         return true;
     }
@@ -181,15 +187,22 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
             int minVal = std::holds_alternative<int>(param.MinValue) ? std::get<int>(param.MinValue) : 0;
             int maxVal = std::holds_alternative<int>(param.MaxValue) ? std::get<int>(param.MaxValue) : 100;
             int step = std::holds_alternative<int>(param.Step) ? std::get<int>(param.Step) : 1;
+            if (step <= 0)
+            {
+                step = 1;
+            }
             int curVal = param.GetInt();
 
-            slider->setRange(minVal, maxVal);
-            slider->setSingleStep(step);
-            slider->setValue(curVal);
-
+            spinBox->setMinimumWidth(85);
+            spinBox->setAlignment(Qt::AlignRight);
             spinBox->setRange(minVal, maxVal);
             spinBox->setSingleStep(step);
             spinBox->setValue(curVal);
+
+            slider->setRange(minVal, maxVal);
+            slider->setSingleStep(step);
+            slider->setPageStep(std::max(step * 5, 10));
+            slider->setValue(curVal);
 
             slider->setEnabled(!isPreview);
             spinBox->setEnabled(!isPreview);
@@ -230,16 +243,43 @@ void PropertyPanel::BuildParamControls(IOpNode* opNode, bool isPreview)
             double minVal = param.MinValue.index() == 0 ? std::get<int>(param.MinValue) : std::get<double>(param.MinValue);
             double maxVal = param.MaxValue.index() == 0 ? std::get<int>(param.MaxValue) : std::get<double>(param.MaxValue);
             double step = param.Step.index() == 0 ? std::get<int>(param.Step) : std::get<double>(param.Step);
+            if (step <= 0.0)
+            {
+                step = (maxVal - minVal >= 100.0) ? 1.0 : ((maxVal - minVal >= 10.0) ? 0.1 : 0.01);
+            }
             double curVal = param.GetDouble();
 
-            int scale = 100;
-            slider->setRange(static_cast<int>(minVal * scale), static_cast<int>(maxVal * scale));
-            slider->setValue(static_cast<int>(curVal * scale));
+            int decimals = 2;
+            if (step < 0.01)
+            {
+                decimals = 3;
+            }
+            else if (step >= 1.0 && maxVal >= 100.0)
+            {
+                decimals = 1;
+            }
 
+            int scale = (decimals >= 3) ? 1000 : ((decimals == 2) ? 100 : 10);
+            if ((maxVal - minVal) * scale > 1000000.0)
+            {
+                scale = static_cast<int>(1000000.0 / (maxVal - minVal));
+                if (scale < 1)
+                {
+                    scale = 1;
+                }
+            }
+
+            spinBox->setMinimumWidth(85);
+            spinBox->setAlignment(Qt::AlignRight);
             spinBox->setRange(minVal, maxVal);
             spinBox->setSingleStep(step);
-            spinBox->setDecimals(2);
+            spinBox->setDecimals(decimals);
             spinBox->setValue(curVal);
+
+            slider->setRange(static_cast<int>(minVal * scale), static_cast<int>(maxVal * scale));
+            slider->setSingleStep(std::max(1, static_cast<int>(step * scale)));
+            slider->setPageStep(std::max(5, static_cast<int>(step * scale * 5)));
+            slider->setValue(static_cast<int>(curVal * scale));
 
             slider->setEnabled(!isPreview);
             spinBox->setEnabled(!isPreview);

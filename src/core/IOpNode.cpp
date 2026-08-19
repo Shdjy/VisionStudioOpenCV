@@ -46,12 +46,13 @@ bool IOpNode::SetParameter(const std::string& name, const std::variant<int, doub
             const double doubleValue = std::holds_alternative<double>(value)
                 ? std::get<double>(value)
                 : static_cast<double>(std::get<int>(value));
-            if (doubleValue < GetNumericLimit(param->MinValue) ||
-                doubleValue > GetNumericLimit(param->MaxValue))
+            const double minLimit = GetNumericLimit(param->MinValue);
+            const double maxLimit = GetNumericLimit(param->MaxValue);
+            if (doubleValue < minLimit - 1e-5 || doubleValue > maxLimit + 1e-5)
             {
                 return false;
             }
-            param->Value = doubleValue;
+            param->Value = std::clamp(doubleValue, minLimit, maxLimit);
             return true;
         }
         case ParamType::ComboBox:
