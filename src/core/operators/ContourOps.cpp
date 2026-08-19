@@ -145,14 +145,22 @@ FindContoursOp::FindContoursOp()
 std::string FindContoursOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：轮廓查找与多维度特征筛选分析 (findContours & Filter)\n\n"
-           "基于拓扑结构分析提取二值图像中目标边界，并支持工业级多维度形态学指标筛选：\n"
-           "* **面积过滤 ($S$)**：通过格林公式计算多边形闭合面积 $S = \\text{contourArea}(cnt)$，排除椒盐微小噪点或超大背景；\n"
-           "* **几何外接包围盒**：\n"
-           "  * 正外接矩形：`boundingRect`，获取 $[x, y, w, h]$；\n"
-           "  * 最小旋转矩形：`minAreaRect`，获取旋转角 $\\theta$ 与真实主轴长宽；\n"
-           "  * 最小外接圆：`minEnclosingCircle`，获取中心与半径；\n"
-           "* **最大轮廓提取 / Top-K 筛选**：自动按面积降序排序并提取主目标；\n"
-           "* **质心与尺寸标注**：利用一阶空间矩 $C_x = \\frac{m_{10}}{m_{00}}, C_y = \\frac{m_{01}}{m_{00}}$ 计算物理重心。";
+           "**【核心思想】**\n"
+           "基于拓扑结构分析提取二值图像中物体连通边界，并支持通过几何面积、包围盒长宽及 Top-K 策略快速筛选目标工件，实现质心坐标与几何测量。\n\n"
+           "**【数学模型与计算指标】**\n"
+           "```\n"
+           "   1. 轮廓闭合面积 (格林公式):  S = 0.5 · | ∑ (x_i · y_{i+1} - x_{i+1} · y_i) |\n"
+           "\n"
+           "   2. 物理质心 (几何矩):        Cx = m₁₀ / m₀₀,   Cy = m₀₁ / m₀₀\n"
+           "\n"
+           "   3. 最小旋转矩形 (MinAreaRect): 基于旋转卡壳法计算真实方向角 θ 与主轴长宽\n"
+           "\n"
+           "   4. 凸包分析 (ConvexHull):     基于 Graham 扫描法计算包含轮廓的最小凸多边形\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **mode**：检索拓扑层级（RETR_EXTERNAL 仅外层，RETR_TREE 嵌套树）；\n"
+           "- **filterStrategy**：保留所有、仅最大面积（Max Area Only）或 Top-K；\n"
+           "- **drawType**：标注模式（正矩形、旋转矩形、最小外接圆、凸包）。";
 }
 
 bool FindContoursOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

@@ -154,8 +154,16 @@ ChannelMergeOp::ChannelMergeOp()
 
 std::string ChannelMergeOp::GetPrincipleDoc() const
 {
-    return "### 通道重组\n\n`cv::merge` 将多个等尺寸、等深度的单通道矩阵合成为多通道矩阵。"
-           "本算子允许重复、交换或清零 B/G/R 通道，也可把灰度通道复制到任意输出通道。";
+    return "### 📘 算子原理：多通道重组与分量融合 (merge)\n\n"
+           "**【核心思想】**\n"
+           "将多个尺寸、数据类型相同的单通道灰度矩阵合成为多通道彩色图像，支持对 B/G/R 颜色分量进行自由映射、交叉互换或置零屏蔽。\n\n"
+           "**【融合映射机制】**\n"
+           "```\n"
+           "   dst(x, y) = [ Ch_Blue(x, y), Ch_Green(x, y), Ch_Red(x, y) ]ᵀ\n"
+           "```\n\n"
+           "**【工程应用建议】**\n"
+           "- 伪彩色合成：将红外热成像通道与可见光通道合成双光谱融合图；\n"
+           "- 单色分量提取测试：保留单通道并将其他通道置零。";
 }
 
 bool ChannelMergeOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -239,7 +247,19 @@ NormalizeOp::NormalizeOp()
 
 std::string NormalizeOp::GetPrincipleDoc() const
 {
-    return "### 矩阵归一化\n\nMINMAX 把数值线性映射到指定区间；L1、L2 和 INF 则把矩阵对应范数缩放到目标值。";
+    return "### 📘 算子原理：数值区间线性与范数归一化 (normalize)\n\n"
+           "**【核心思想】**\n"
+           "将图像矩阵元素的取值范围线性重缩放至指定的数值区间或指定的范数约束，常用于浮点型特征图与距离场的 8 位可视化显示。\n\n"
+           "**【数学模型 / NORM_MINMAX 线性映射】**\n"
+           "```\n"
+           "                 I(x, y) - min(I)\n"
+           "   dst(x, y) = ───────────────────── · (β - α) + α\n"
+           "                 max(I) - min(I)\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **alpha (α)**：目标区间下限（如 0）；\n"
+           "- **beta (β)**：目标区间上限（如 255）；\n"
+           "- **normType**：NORM_MINMAX (线性区间缩放)、NORM_L1/L2 (单位范数化)。";
 }
 
 bool NormalizeOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -316,7 +336,15 @@ SeparableFilterOp::SeparableFilterOp()
 
 std::string SeparableFilterOp::GetPrincipleDoc() const
 {
-    return "### 可分离滤波\n\n当二维卷积核可写为列向量与行向量的外积时，可用两次一维卷积把复杂度从 O(K^2) 降到 O(2K)。";
+    return "### 📘 算子原理：一维正交可分离滤波 (sepFilter2D)\n\n"
+           "**【核心思想】**\n"
+           "当二维卷积核 K 满足可分离性质（可分解为一维列核与行核外积 K = K_col ⊗ K_row）时，通过两次一维卷积完成等价滤波，大幅降低计算复杂度。\n\n"
+           "**【计算复杂度对比】**\n"
+           "```\n"
+           "   - 标准二维卷积: O(K_w · K_h · W · H) 次乘加操作\n"
+           "   - 可分离滤波:   O((K_w + K_h) · W · H) 次乘加操作\n"
+           "   (当 K=15 时，运算量骤降为原来的 2/15 ≈ 13%)\n"
+           "```";
 }
 
 bool SeparableFilterOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -428,7 +456,17 @@ AffineTransformOp::AffineTransformOp()
 
 std::string AffineTransformOp::GetPrincipleDoc() const
 {
-    return "### 二维仿射变换\n\n仿射矩阵保持直线和平行关系，可统一表达旋转、缩放、平移和错切。`warpAffine` 使用 2x3 矩阵完成反向采样。";
+    return "### 📘 算子原理：二维仿射变换与空间映射 (warpAffine)\n\n"
+           "**【核心思想】**\n"
+           "通过 2×3 仿射变换矩阵实现图像的中心旋转、各向同性缩放、二维平移与水平/垂直剪切错切变换，保持直线的平行性。\n\n"
+           "**【数学模型 / 2×3 仿射变换矩阵】**\n"
+           "```\n"
+           "   ┌ x' ┐   ┌ α   β   tx ┐   ┌ x ┐\n"
+           "   │    │ = │            │ · │ y │\n"
+           "   └ y' ┘   └ -β  α   ty ┘   └ 1 ┘\n"
+           "\n"
+           "   其中 α = scale · cos(θ),  β = scale · sin(θ)\n"
+           "```";
 }
 
 bool AffineTransformOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -497,7 +535,15 @@ ImageStatisticsOp::ImageStatisticsOp()
 
 std::string ImageStatisticsOp::GetPrincipleDoc() const
 {
-    return "### 像素统计\n\n`minMaxLoc` 获取极值，`meanStdDev` 计算各通道均值与标准差。结构化结果可供界面或外部调用读取。";
+    return "### 📘 算子原理：图像多通道统计量分析 (minMaxLoc & meanStdDev)\n\n"
+           "**【核心思想】**\n"
+           "快速分析图像各通道的灰度分布统计特征，输出最值、均值与方差，为曝光质量判定、对比度监测与在线自动质检提供量化指标。\n\n"
+           "**【数学统计模型】**\n"
+           "```\n"
+           "   - 极值范围:  min_val = min{ I(x, y) },  max_val = max{ I(x, y) }\n"
+           "   - 算术均值:  μ = (1 / N) · ∑ I(x, y)\n"
+           "   - 样本标准差: σ = √[ (1 / N) · ∑ (I(x, y) - μ)² ]\n"
+           "```";
 }
 
 bool ImageStatisticsOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -594,7 +640,16 @@ HistogramCompareOp::HistogramCompareOp()
 
 std::string HistogramCompareOp::GetPrincipleDoc() const
 {
-    return "### 直方图比较\n\n将当前图和原始图的归一化灰度直方图进行比较。相关性和交集越大越相似，卡方与巴氏距离越小越相似。";
+    return "### 📘 算子原理：直方图相似度匹配度量 (compareHist)\n\n"
+           "**【核心思想】**\n"
+           "对比当前图像与基准源图在归一化灰度直方图分布上的统计学相似度，判定是否存在大面积色差、污损或光照突变。\n\n"
+           "**【数学度量方法】**\n"
+           "```\n"
+           "   - HISTCMP_CORREL: 相关性度量 (值域 [-1, 1]，越接近 1 越相似)\n"
+           "   - HISTCMP_CHISQR: 卡方距离 (值越小越相似)\n"
+           "   - HISTCMP_INTERSECT: 直方图交集 (重叠面积越大越相似)\n"
+           "   - HISTCMP_BHATTACHARYYA: 巴氏距离 (值越接近 0 越匹配)\n"
+           "```";
 }
 
 bool HistogramCompareOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -694,7 +749,15 @@ HistogramMatchOp::HistogramMatchOp()
 
 std::string HistogramMatchOp::GetPrincipleDoc() const
 {
-    return "### 直方图规定化\n\n分别计算输入图与原始参考图的累积分布函数 CDF，并建立最接近 CDF 值之间的灰度查找表。";
+    return "### 📘 算子原理：直方图规定化与色调迁移 (Histogram Specification)\n\n"
+           "**【核心思想】**\n"
+           "通过计算输入图像与参考基准图的累积分布函数（CDF），建立单调递增的灰度级映射查找表（LUT），使处理后图像的直方图形状逼近参考标准图。\n\n"
+           "**【数学映射模型】**\n"
+           "```\n"
+           "   1. 输入 CDF:  S_in(r)  = ∑ p_in(w),  w ∈ [0, r]\n"
+           "   2. 参考 CDF:  S_ref(z) = ∑ p_ref(w), w ∈ [0, z]\n"
+           "   3. 查找表:    LUT(r)   = argmin_z | S_ref(z) - S_in(r) |\n"
+           "```";
 }
 
 bool HistogramMatchOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -808,7 +871,17 @@ MomentsHuOp::MomentsHuOp()
 
 std::string MomentsHuOp::GetPrincipleDoc() const
 {
-    return "### 图像矩与 Hu 矩\n\n空间矩描述区域质量分布，`m10/m00` 和 `m01/m00` 给出质心。七个 Hu 组合矩对平移、尺度和旋转具有不变性。";
+    return "### 📘 算子原理：图像几何矩与 Hu 形状不变矩 (moments & HuMoments)\n\n"
+           "**【核心思想】**\n"
+           "通过对连通域或轮廓计算多阶空间矩、中心矩与归一化矩，生成对平移、旋转及各向同性缩放均保持不变的 7 个 Hu 不变矩特征向量。\n\n"
+           "**【数学几何矩方程】**\n"
+           "```\n"
+           "   - (p+q) 阶空间矩: m_pq = ∑∑ xᵖ · yᵠ · I(x, y)\n"
+           "   - 几何质心坐标:   cx = m₁₀ / m₀₀,  cy = m₀₁ / m₀₀\n"
+           "   - 归一化中心矩:   η_pq = μ_pq / (m₀₀)^((p+q)/2 + 1)\n"
+           "```\n\n"
+           "**【工程应用建议】**\n"
+           "- 异形工件品类识别与姿态朝向不变性分类检索。";
 }
 
 bool MomentsHuOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

@@ -85,12 +85,25 @@ CornerHarrisOp::CornerHarrisOp()
 
 std::string CornerHarrisOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：Harris 角点检测 (cornerHarris)\n\n"
-           "通过局部自相关矩阵 $M = \\sum_{x,y} w(x,y) \\begin{bmatrix} I_x^2 & I_x I_y \\\\ I_x I_y & I_y^2 \\end{bmatrix}$ 计算角点响应度：\n"
-           "$$R = \\det(M) - k \\cdot (\\text{trace}(M))^2$$\n"
-           "* **$R > 0$ 且幅值极大**：角点（两个正交方向灰度变化均极剧烈）；\n"
-           "* **$R < 0$**：直线边缘；\n"
-           "* **$|R|$ 接近 0**：平坦区域。";
+    return "### 📘 算子原理：Harris 角点特征检测 (cornerHarris)\n\n"
+           "**【核心思想】**\n"
+           "通过构建空间自相关矩阵（结构张量 Structure Tensor），计算图像在各个方向上的灰度变化梯度分布。在角点处，任意微小位移都会引发极大的自相关能量突变。\n\n"
+           "**【数学模型 / 结构张量与响应函数】**\n"
+           "```\n"
+           "   自相关矩阵:  M = ∑  w(x, y) · ┌ Ix²   Ix·Iy ┐\n"
+           "                 x,y           └ Ix·Iy  Iy²   ┘\n"
+           "\n"
+           "   角点响应值:  R = det(M) - k · [ trace(M) ]²\n"
+           "                  = (λ₁ · λ₂) - k · (λ₁ + λ₂)²\n"
+           "```\n\n"
+           "**【判决准则】**\n"
+           "- **R > 0 且幅值极大**：两特征值 λ₁, λ₂ 均很大且接近，判定为**角点**；\n"
+           "- **R < 0 且幅值极大**：一个特征值远大于另一个，判定为**直线边缘**；\n"
+           "- **|R| 接近 0**：两特征值均很小，判定为**平坦背景**。\n\n"
+           "**【符号与参数解析】**\n"
+           "- **blockSize**：空间邻域窗口大小；\n"
+           "- **ksize**：用于微分求导的 Sobel 核孔径；\n"
+           "- **k**：Harris 经验敏感度常数（通常取 0.04~0.06）。";
 }
 
 bool CornerHarrisOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -228,8 +241,17 @@ GoodFeaturesToTrackOp::GoodFeaturesToTrackOp()
 std::string GoodFeaturesToTrackOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：Shi-Tomasi 优质角点检测 (goodFeaturesToTrack)\n\n"
-           "基于自相关矩阵的**最小特征值准则** $\\min(\\lambda_1, \\lambda_2) > \\lambda_{min}$。\n"
-           "相比 Harris 算子，Shi-Tomasi 在特征点跟踪与光流法 (KLT) 中表现更鲁棒、分布更均匀。";
+           "**【核心思想】**\n"
+           "Shi-Tomasi 对 Harris 算子进行了改进，直接计算自相关矩阵的最小特征值作为角点品质度量，在光流特征跟踪 (KLT) 与 SLAM 中比 Harris 更稳定、分布更均匀。\n\n"
+           "**【数学模型 / 判决准则】**\n"
+           "```\n"
+           "   品质度量:  R = min(λ₁, λ₂)\n"
+           "   角点判决:  R > QualityLevel · max(R_all)\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **maxCorners**：保留的最强特征角点最大数量上限；\n"
+           "- **qualityLevel**：角点质量阈值比例（如 0.01 表示低于最强角点 1% 强度的点被舍弃）；\n"
+           "- **minDistance**：两个输出角点之间的最小欧氏像素物理距离（NMS 空间去重）。";
 }
 
 bool GoodFeaturesToTrackOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -256,10 +278,10 @@ bool GoodFeaturesToTrackOp::Process(const cv::Mat& input, cv::Mat& output, std::
         std::vector<cv::Point2f> corners;
         cv::goodFeaturesToTrack(gray, corners, maxCorners, qualityLevel, minDistance);
 
-        for (size_t i = 0; i < corners.size(); ++i)
+        for (size_t i = 0; i < corners.size(); i++)
         {
-            cv::circle(output, corners[i], 4, cv::Scalar(0, 255, 0), -1);
-            cv::circle(output, corners[i], 6, cv::Scalar(0, 0, 255), 1);
+            cv::circle(output, corners[i], 4, cv::Scalar(0, 255, 0), -1, 8, 0);
+            cv::circle(output, corners[i], 6, cv::Scalar(0, 0, 255), 1, 8, 0);
         }
         return true;
     }
@@ -277,15 +299,16 @@ std::string GoodFeaturesToTrackOp::GenerateCppCode(const std::string& inVar, con
     double minDistance = _params[2].GetDouble();
 
     std::stringstream ss;
-    ss << "// Shi-Tomasi优质特征点检测参数配置\n"
-       << "int maxCorners = " << maxCorners << ";           // 返回角点最大数量上限\n"
-       << "double qualityLevel = " << qualityLevel << ";     // 角点质量最小相对比例\n"
-       << "double minDistance = " << minDistance << ";       // 两相邻角点最小物理间距 (px)\n"
+    ss << "// Shi-Tomasi优质角点检测参数配置\n"
+       << "int maxCorners = " << maxCorners << ";            // 最大角点数量\n"
+       << "double qualityLevel = " << qualityLevel << ";      // 质量水平门限\n"
+       << "double minDistance = " << minDistance << ";        // 角点最小物理间距\n"
        << "std::vector<cv::Point2f> corners;\n"
        << "cv::goodFeaturesToTrack(" << inVar << ", corners, maxCorners, qualityLevel, minDistance);\n"
        << "cv::cvtColor(" << inVar << ", " << outVar << ", cv::COLOR_GRAY2BGR);\n"
-       << "for (size_t i = 0; i < corners.size(); ++i) {\n"
-       << "    cv::circle(" << outVar << ", corners[i], 4, cv::Scalar(0, 255, 0), -1);\n"
+       << "for (const auto& pt : corners) {\n"
+       << "    cv::circle(" << outVar << ", pt, 4, cv::Scalar(0, 255, 0), -1);\n"
+       << "    cv::circle(" << outVar << ", pt, 6, cv::Scalar(0, 0, 255), 1);\n"
        << "}";
     return ss.str();
 }
@@ -297,17 +320,18 @@ std::string GoodFeaturesToTrackOp::GeneratePythonCode(const std::string& inVar, 
     double minDistance = _params[2].GetDouble();
 
     std::stringstream ss;
-    ss << "# Shi-Tomasi优质特征点检测参数配置\n"
-       << "max_corners = " << maxCorners << "           # 最大返回角点数量\n"
-       << "quality_level = " << qualityLevel << "       # 最小质量阈值比例\n"
-       << "min_distance = " << minDistance << "         # 角点最小欧氏间距 (px)\n"
+    ss << "# Shi-Tomasi优质角点检测参数配置\n"
+       << "max_corners = " << maxCorners << "             # 最大角点数量\n"
+       << "quality_level = " << qualityLevel << "           # 质量水平门限\n"
+       << "min_distance = " << minDistance << "            # 角点最小物理间距\n"
        << "gray = " << inVar << " if len(" << inVar << ".shape) == 2 else cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2GRAY)\n"
        << "corners = cv2.goodFeaturesToTrack(gray, max_corners, quality_level, min_distance)\n"
        << outVar << " = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR) if len(" << inVar << ".shape) == 2 else " << inVar << ".copy()\n"
        << "if corners is not None:\n"
-       << "    for pt in corners:\n"
+       << "    for pt in np.int0(corners):\n"
        << "        x, y = pt.ravel()\n"
-       << "        cv2.circle(" << outVar << ", (int(x), int(y)), 4, (0, 255, 0), -1)";
+       << "        cv2.circle(" << outVar << ", (x, y), 4, (0, 255, 0), -1)\n"
+       << "        cv2.circle(" << outVar << ", (x, y), 6, (0, 0, 255), 1)";
     return ss.str();
 }
 
@@ -420,11 +444,18 @@ MatchTemplateOp::MatchTemplateOp()
 std::string MatchTemplateOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：模板匹配与目标定位 (matchTemplate)\n\n"
-           "基于滑窗互相关矩阵在图像中遍历搜索指定 ROI 模板或本地模板图像：\n"
-           "* **本地外部模板支持**：支持直接加载本地高精度标准品切片进行跨图检测；\n"
-           "* **度量方法**：归一化相关系数 $R(x, y) = \\frac{\\sum (T - \\bar{T})(I - \\bar{I})}{\\sqrt{\\sum (T - \\bar{T})^2 \\sum (I - \\bar{I})^2}} \\in [-1, 1]$；\n"
-           "* **单目标定位**：`cv::minMaxLoc` 寻找全局响应峰值点；\n"
-           "* **多目标检测与非极大值抑制**：基于置信度门限与距离邻域批量定位所有工件。";
+           "**【核心思想】**\n"
+           "基于二维滑动窗口互相关度量，在大图中逐像素滑动并计算与标准目标模板（Template）的相似度得分矩阵，寻找全局响应峰值或多目标检测。\n\n"
+           "**【归一化相关系数数学模型 (TM_CCOEFF_NORMED)】**\n"
+           "```\n"
+           "                 ∑ [ T(x', y') - T̄ ] · [ I(x + x', y + y') - Ī(x, y) ]\n"
+           "   R(x, y) = ─────────────────────────────────────────────────────────────\n"
+           "              √{ ∑ [ T(x', y') - T̄ ]² } · √{ ∑ [ I(x + x', y + y') - Ī(x, y) ]² }\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **method**：度量方式（首选 TM_CCOEFF_NORMED，得分区间 [-1.0, 1.0]，对光照强度线性变化具有鲁棒性）；\n"
+           "- **scoreThreshold**：相似度门限分数（通常要求 ≥ 0.80）；\n"
+           "- **multiMatch**：是否开启多目标批量识别。";
 }
 
 void MatchTemplateOp::SetTemplateRoi(int x, int y, int w, int h)

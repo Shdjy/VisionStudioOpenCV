@@ -44,12 +44,25 @@ CannyOp::CannyOp()
 
 std::string CannyOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：Canny 边缘检测 (Canny)\n\n"
-           "经典的极值抑制多阶段边缘检测算法：\n"
-           "1. 高斯滤波降噪；\n"
-           "2. 计算梯度幅值与方向；\n"
-           "3. **非极大值抑制 (NMS)**，细化边缘；\n"
-           "4. **双阈值滞后跟踪**：高于 Threshold2 为确定边缘，低于 Threshold1 抑制，介于两者之间的若与确定边缘连通则保留。";
+    return "### 📘 算子原理：Canny 多阶段双阈值边缘检测 (Canny)\n\n"
+           "**【核心思想】**\n"
+           "Canny 是工业界应用最广泛的经典最优边缘检测算法，满足低错误率、高定位精度和单边缘响应三大准则。通过梯度极值点非极大值抑制结合双阈值滞后跟踪，有效消除伪边缘与噪点。\n\n"
+           "**【四步计算流程与数学模型】**\n"
+           "```\n"
+           "   1. 高斯平滑:  I_smooth = I * G(σ)\n"
+           "   2. 梯度计算:  Gx = ∂I/∂x,  Gy = ∂I/∂y\n"
+           "                 幅值 |M| = √(Gx² + Gy²),  方向 θ = arctan(Gy / Gx)\n"
+           "   3. 非极大值抑制 (NMS): 沿梯度法线方向进行局部最大值插值比较，抑制非极大值点\n"
+           "   4. 双阈值滞后跟踪 (Hysteresis):\n"
+           "        ┌ |M| ≥ threshold2  ──> 强边缘 (绝对保留)\n"
+           "        ├ |M| < threshold1  ──> 噪点 (彻底抑制)\n"
+           "        └ threshold1 ≤ |M| < threshold2 ──> 若与强边缘 8-连通则保留，否则舍弃\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **threshold1 (低阈值)**：弱边缘连接下限门限；\n"
+           "- **threshold2 (高阈值)**：强边缘判定触发上限门限（工业推荐比例约为 1:2 ~ 1:3）；\n"
+           "- **apertureSize**：用于求导的 Sobel 核窗口孔径（通常选 3）；\n"
+           "- **L2gradient**：是否启用精确欧氏范数 √(Gx²+Gy²)，若为 false 则采用近似绝对值 |Gx|+|Gy| 加快速度。";
 }
 
 bool CannyOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -150,9 +163,21 @@ SobelOp::SobelOp()
 std::string SobelOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：Sobel 一阶导数边缘检测 (Sobel)\n\n"
-           "结合高斯平滑和微分求导，计算一阶离散差分梯度：\n"
-           "$$G_x = \\begin{bmatrix} -1 & 0 & 1 \\\\ -2 & 0 & 2 \\\\ -1 & 0 & 1 \\end{bmatrix} * I, \\quad G_y = \\begin{bmatrix} -1 & -2 & -1 \\\\ 0 & 0 & 0 \\\\ 1 & 2 & 1 \\end{bmatrix} * I$$\n"
-           "合成幅值：$G = \\sqrt{G_x^2 + G_y^2}$。";
+           "**【核心思想】**\n"
+           "Sobel 算子将高斯加权平滑与一阶空间中心差分求导相结合，分别在水平与垂直方向对灰度变化剧烈的边缘轮廓进行差分增强，兼具抗噪性与边缘检测能力。\n\n"
+           "**【数学模型 / 卷积核矩阵】**\n"
+           "```\n"
+           "   水平导数核 Gx (检测垂直边缘)        垂直导数核 Gy (检测水平边缘)\n"
+           "        ┌ -1   0   1 ┐                     ┌ -1  -2  -1 ┐\n"
+           "   Gx = │ -2   0   2 │ · I            Gy = │  0   0   0 │ · I\n"
+           "        └ -1   0   1 ┘                     └  1   2   1 ┘\n"
+           "\n"
+           "   合成梯度幅值: G = √(Gx² + Gy²)  或近似快速值: G ≈ 0.5·|Gx| + 0.5·|Gy|\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **direction**：计算 X 方向、Y 方向或 XY 双向合成梯度；\n"
+           "- **ksize**：微分核尺寸（通常为 3, 5, 7），核越大抗噪越强但边缘定位精度稍降；\n"
+           "- **scale**：输出梯度幅值的放大缩放因子。";
 }
 
 bool SobelOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -290,9 +315,20 @@ ScharrOp::ScharrOp()
 std::string ScharrOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：Scharr 高精度边缘检测 (Scharr)\n\n"
-           "当 Sobel 算子尺寸为 $3 \\times 3$ 时，可能存在方向旋转不变性误差。Scharr 算子针对小核进行了优化：\n"
-           "$$G_x = \\begin{bmatrix} -3 & 0 & 3 \\\\ -10 & 0 & 10 \\\\ -3 & 0 & 3 \\end{bmatrix}$$\n"
-           "**优势**：在检测细微边缘时比 Sobel 更准确、梯度幅值更强。";
+           "**【核心思想】**\n"
+           "标准 3×3 Sobel 算子在非轴向角度存在一定旋转不变性偏差。Scharr 算子针对 3×3 小尺度空间核重新进行了系数数值优化，具有更高的方向对称性与细微边缘响应灵敏度。\n\n"
+           "**【数学模型 / 卷积核矩阵】**\n"
+           "```\n"
+           "   水平高精度核 Gx                        垂直高精度核 Gy\n"
+           "        ┌  -3   0   3 ┐                        ┌  -3 -10  -3 ┐\n"
+           "   Gx = │ -10   0  10 │ · I               Gy = │   0   0   0 │ · I\n"
+           "        └  -3   0   3 ┘                        └   3  10   3 ┘\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **direction**：选择求导方向分量或全向合成；\n"
+           "- **scale**：梯度增益系数。\n\n"
+           "**【工程应用建议】**\n"
+           "- 相比 Sobel 3×3：在检测低对比度浅边缘、极细划痕或精密工件毛刺时响应更强、定位更锐利。";
 }
 
 bool ScharrOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -423,10 +459,23 @@ LaplacianOp::LaplacianOp()
 
 std::string LaplacianOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：拉普拉斯二阶导数边缘检测 (Laplacian)\n\n"
-           "拉普拉斯算子是**各向同性**的二阶微分算子：\n"
-           "$$\\Delta I = \\frac{\\partial^2 I}{\\partial x^2} + \\frac{\\partial^2 I}{\\partial y^2}$$\n"
-           "**特点**：检测图像灰度变化的过零点 (Zero-Crossing)，对孤立细线和角点特别敏感。";
+    return "### 📘 算子原理：拉普拉斯二阶微分边缘检测 (Laplacian)\n\n"
+           "**【核心思想】**\n"
+           "拉普拉斯算子是一种二维各向同性（旋转不变）二阶微分算子，通过寻找图像灰度二阶导数的零交叉点 (Zero-Crossing) 来精确定位边缘。\n\n"
+           "**【数学模型 / 微分方程与离散核】**\n"
+           "```\n"
+           "   连续空间公式:  ΔI = ∂²I/∂x² + ∂²I/∂y²\n"
+           "\n"
+           "   标准 3×3 4-邻域离散核               扩展 3×3 8-邻域离散核\n"
+           "        ┌  0   1   0 ┐                     ┌  1   1   1 ┐\n"
+           "    L = │  1  -4   1 │                 L = │  1  -8   1 │\n"
+           "        └  0   1   0 ┘                     └  1   1   1 ┘\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **ksize**：二阶导数核孔径（必须为正奇数）；\n"
+           "- **scale**：二阶差分结果的缩放乘数。\n\n"
+           "**【工程应用建议】**\n"
+           "- 特点：对孤立噪点、细线条与角点高度敏感，通常建议先进行高斯平滑（即 LoG 算子组合）以避免噪点被二次放大。";
 }
 
 bool LaplacianOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

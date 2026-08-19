@@ -75,13 +75,28 @@ BlendWithSourceOp::BlendWithSourceOp()
 
 std::string BlendWithSourceOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：多图与原图算术逻辑复合运算 (Image Arithmetic)\n\n"
-           "工业机器视觉中极度关键的复合分析运算：\n"
-           "* **绝对值差分 (`cv::absdiff`)**：$$dst(x, y) = |src_1(x, y) - src_2(x, y)|$$\n"
-           "  广泛用于工业印刷瑕疵检测、金样比对（Golden Template Comparison）与定位形变检测；\n"
-           "* **加权融合 (`cv::addWeighted`)**：$$dst = \\alpha \\cdot src_1 + \\beta \\cdot src_2 + \\gamma$$\n"
-           "  实现多波段打光图像的无缝合成与热力图/结果半透明叠加；\n"
-           "* **按位运算 (`bitwise_and/or/xor`)**：实现掩码 ROI 提取与轮廓边界交并差集合运算。";
+    return "### 📘 算子原理：图像算术与逻辑代数运算 (Image Arithmetic)\n\n"
+           "**【核心思想】**\n"
+           "对两幅对齐的图像（或当前图与原图/纯色底板）执行逐像素点对点的代数加减、乘除融合、差分与布尔逻辑运算，是工业缺陷比对与掩码抠图的核心基石。\n\n"
+           "**【主要运算模型与数学公式】**\n"
+           "```\n"
+           "   1. 线性加权融合 (addWeighted):\n"
+           "        dst(x, y) = saturate( α·src₁(x, y) + β·src₂(x, y) + γ )\n"
+           "\n"
+           "   2. 绝对值差分 (absdiff - 工业标准缺陷检测):\n"
+           "        dst(x, y) = | src₁(x, y) - src₂(x, y) |\n"
+           "\n"
+           "   3. 饱和代数加/减法 (add / subtract):\n"
+           "        dst_add(x, y) = min(src₁ + src₂, 255)\n"
+           "        dst_sub(x, y) = max(src₁ - src₂, 0)\n"
+           "\n"
+           "   4. 按位布尔运算 (bitwise_and / bitwise_or / bitwise_xor):\n"
+           "        dst_and(x, y) = src₁(x, y) & src₂(x, y)  (掩码 ROI 提取)\n"
+           "        dst_xor(x, y) = src₁(x, y) ^ src₂(x, y)  (微小结构变化提取)\n"
+           "```\n\n"
+           "**【工程应用建议】**\n"
+           "- 缺陷检测：将标准良品金样与待测工件对齐后执行 AbsDiff，差值大于阈值即为缺陷；\n"
+           "- 掩码提取：与二值 Mask 执行 Bitwise AND，可无损抠取指定 ROI 区域。";
 }
 
 bool BlendWithSourceOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

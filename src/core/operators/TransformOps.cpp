@@ -30,11 +30,27 @@ ResizeOp::ResizeOp()
 
 std::string ResizeOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：几何缩放 (resize)\n\n"
-           "* **最近邻 (NEAREST)**：速度最快，有马赛克锯齿。\n"
-           "* **双线性 (LINEAR)**：取 $2 \\times 2$ 邻域加权，速度与画质均衡。\n"
-           "* **双三次 (CUBIC)**：取 $4 \\times 4$ 邻域三次样条插值，边缘平滑。\n"
-           "* **区域插值 (AREA)**：图像缩小采样时能有效避免莫尔纹伪影。";
+    return "### 📘 算子原理：图像空间几何缩放 (resize)\n\n"
+           "**【核心思想】**\n"
+           "通过坐标系映射将原图像像素栅格重采样至目标尺寸，不同插值算法在计算效率与边缘抗锯齿画质之间权衡。\n\n"
+           "**【主流插值算法原理】**\n"
+           "```\n"
+           "   1. 最近邻插值 (INTER_NEAREST):\n"
+           "        dst(x, y) = src( round(x / scale), round(y / scale) )\n"
+           "        特点: 速度极快，但放大时有明显马赛克台阶锯齿\n"
+           "\n"
+           "   2. 双线性插值 (INTER_LINEAR - 工业推荐):\n"
+           "        基于目标点在原图投影点周围 2×2 邻域 4 个像素的加权距离插值，画质平滑\n"
+           "\n"
+           "   3. 双三次插值 (INTER_CUBIC):\n"
+           "        基于 4×4 邻域 16 个像素的三次多项式样条卷积，高保真但耗时较高\n"
+           "\n"
+           "   4. 区域重采样 (INTER_AREA):\n"
+           "        图像缩小专用，利用像素面积重叠比例积分，彻底避免莫尔纹与高频走样\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **scale**：等比例缩放倍数因子；\n"
+           "- **interpolation**：插值模式选择。";
 }
 
 bool ResizeOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -120,10 +136,21 @@ RotateOp::RotateOp()
 
 std::string RotateOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：中心仿射旋转 (getRotationMatrix2D + warpAffine)\n\n"
-           "以图像中心点为原点，构建二维仿射变换矩阵：\n"
-           "$$\\begin{bmatrix} \\alpha & \\beta & (1-\\alpha)\\cdot cx - \\beta\\cdot cy \\\\ -\\beta & \\alpha & \\beta\\cdot cx + (1-\\alpha)\\cdot cy \\end{bmatrix}$$\n"
-           "其中 $\\alpha = scale \\cdot \\cos(\\theta), \\beta = scale \\cdot \\sin(\\theta)$。";
+    return "### 📘 算子原理：图像中心仿射旋转 (getRotationMatrix2D + warpAffine)\n\n"
+           "**【核心思想】**\n"
+           "以图像几何中心为基准原点，通过二维旋转仿射变换矩阵将像素坐标绕中心旋转任意角度并支持等比例缩放。\n\n"
+           "**【数学模型 / 2×3 仿射矩阵】**\n"
+           "```\n"
+           "   ┌ x' ┐   ┌  α   β   (1 - α)·cx - β·cy ┐   ┌ x ┐\n"
+           "   │    │ = │                            │ · │ y │\n"
+           "   └ y' ┘   └ -β   α   β·cx + (1 - α)·cy ┘   └ 1 ┘\n"
+           "\n"
+           "   其中: α = scale · cos(θ),  β = scale · sin(θ)\n"
+           "         (cx, cy) 为图像中心点坐标 (w/2, h/2), θ 为逆时针旋转角\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **angle**：旋转角度（度，负数为顺时针，正数为逆时针）；\n"
+           "- **scale**：伴随缩放系数。";
 }
 
 bool RotateOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -202,9 +229,14 @@ FlipOp::FlipOp()
 std::string FlipOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：图像镜像翻转 (flip)\n\n"
-           "* **flipCode = 1**：水平翻转（左右镜像，沿 Y 轴对称）\n"
-           "* **flipCode = 0**：垂直翻转（上下镜像，沿 X 轴对称）\n"
-           "* **flipCode = -1**：双向翻转（原点中心对称）";
+           "**【核心思想】**\n"
+           "通过坐标轴对称映射，快速改变图像视向，用于解决安装倒置、反向相机位姿或数据增强。\n\n"
+           "**【数学模型 / 映射规则】**\n"
+           "```\n"
+           "   - flipCode = 1 (水平镜像):  dst(x, y) = src(w - 1 - x, y)\n"
+           "   - flipCode = 0 (垂直镜像):  dst(x, y) = src(x, h - 1 - y)\n"
+           "   - flipCode = -1 (双向镜像): dst(x, y) = src(w - 1 - x, h - 1 - y)\n"
+           "```";
 }
 
 bool FlipOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -296,7 +328,14 @@ CropRoiOp::CropRoiOp()
 std::string CropRoiOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：ROI 感兴趣区域裁剪 (ROI Crop)\n\n"
-           "通过矩形选框提取关键目标区域，剔除无关背景干扰，减少后续算法计算量。";
+           "**【核心思想】**\n"
+           "通过相对比例或像素矩形选框提取核心检测目标，剔除视野边缘无关背景，成倍降低后续算子的内存占用与计算耗时。\n\n"
+           "**【数学运算】**\n"
+           "```\n"
+           "   ROI = Rect( x = w_img · xRatio, y = h_img · yRatio,\n"
+           "               width = w_img · wRatio, height = h_img · hRatio )\n"
+           "   dst = src(ROI).clone()\n"
+           "```";
 }
 
 bool CropRoiOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

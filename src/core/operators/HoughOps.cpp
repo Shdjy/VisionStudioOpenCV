@@ -58,8 +58,22 @@ HoughLinesPOp::HoughLinesPOp()
 std::string HoughLinesPOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：累计概率霍夫直线变换 (HoughLinesP)\n\n"
-           "基于极坐标对偶变换 $\\rho = x \\cos \\theta + y \\sin \\theta$ 将图像空间中共线点映射为累加器空间交点。\n"
-           "**Progressive Probabilistic** 机制通过对边缘点随机采样，能够直接输出直线的**起点与终点坐标** $(x_1, y_1, x_2, y_2)$。";
+           "**【核心思想】**\n"
+           "基于点-线对偶性，将图像空间中共线的边缘点映射为极坐标参数空间中的相交正弦曲线族。累计概率霍夫变换通过随机子集采样与连通线段追踪，直接输出有限长线段的起止端点坐标。\n\n"
+           "**【数学模型 / 极坐标对偶映射】**\n"
+           "```\n"
+           "   极坐标直线方程:  ρ = x · cos(θ) + y · sin(θ)\n"
+           "\n"
+           "   其中:\n"
+           "     - ρ (rho): 原点到直线的垂线垂直欧氏距离;\n"
+           "     - θ (theta): 垂线与 X 轴正向的夹角 (0~180°);\n"
+           "     - 累加器空间投票峰值点即对应全图共线度最高的线段。\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **rho / theta**：距离与角度离散化网格步长（通常为 1.0px 与 1.0°）；\n"
+           "- **threshold**：累加器投票门限（超过该票数判定为直线）；\n"
+           "- **minLineLength**：滤除短线段的最小物理长度；\n"
+           "- **maxLineGap**：同一直线上断裂缺口的最大允许合并间距。";
 }
 
 bool HoughLinesPOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -219,9 +233,22 @@ HoughCirclesOp::HoughCirclesOp()
 std::string HoughCirclesOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：霍夫圆梯度变换 (HoughCircles)\n\n"
-           "基于 **2-1 霍夫梯度法**：\n"
-           "1. 估计边缘点梯度方向，在累加器平面沿法线投票确定圆心候选；\n"
-           "2. 对各圆心计算到所有边缘点距离并统计半径分布，直接输出检测圆 $(x, y, r)$。";
+           "**【核心思想】**\n"
+           "标准 3D 霍夫空间计算量极大，OpenCV 采用两阶段 2-1 霍夫梯度法（HOUGH_GRADIENT）：首先沿边缘梯度法线投票定位二维圆心候选点，再对非极大值抑制后的圆心计算半径一维直方图提取检测圆。\n\n"
+           "**【数学模型 / 圆几何方程与梯度法线】**\n"
+           "```\n"
+           "   标准方程:  (x - a)² + (y - b)² = r²\n"
+           "\n"
+           "   两阶段流程:\n"
+           "     1. 圆心定位: 边缘点 (x, y) 处梯度法线方程为 y - y₀ = (Gy / Gx)·(x - x₀)\n"
+           "                 多条法线交汇密集处即为圆心 (a, b) 候选点\n"
+           "     2. 半径统计: 计算各边缘点到圆心距离 d = √[(x-a)² + (y-b)²]，取直方图峰值为半径 r\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **dp**：累加器分辨率与图像分辨率的比值倒数（默认 1.0~1.2）；\n"
+           "- **minDist**：检测到的圆心之间的最小物理间距；\n"
+           "- **param1**：Canny 边缘检测的高阈值；\n"
+           "- **param2**：圆心检测累加器阈值（越小检测出假圆越多，越大越严格）。";
 }
 
 bool HoughCirclesOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

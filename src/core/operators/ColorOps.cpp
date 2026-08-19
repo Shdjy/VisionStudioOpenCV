@@ -24,12 +24,29 @@ CvtColorOp::CvtColorOp()
 std::string CvtColorOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：色彩空间转换 (cvtColor)\n\n"
-           "**色彩空间** 是用数值表示颜色的数学模型：\n"
-           "* **RGB / BGR**：加色模型，常用于显示器与通用图像采集。\n"
-           "* **GRAY**：单通道灰度，公式 $Gray = 0.299R + 0.587G + 0.114B$，减少数据量并加速运算。\n"
-           "* **HSV**：H(色调 0~180), S(饱和度 0~255), V(明度 0~255)，极适合用于基于颜色的分割与识别。\n"
-           "* **Lab**：感知均匀色彩空间，L 表示明度，a/b 表示色彩分量，适合颜色差异度量。\n"
-           "* **YCrCb**：Y(亮度), Cr(红色差), Cb(蓝色差)，广泛用于视频编解码与人脸肤色检测。";
+           "**【核心思想】**\n"
+           "不同的色彩模型服务于不同的图像处理任务。通过色彩空间非线性映射，将颜色与亮度解耦，从而克服环境光照变化对特征检测的干扰。\n\n"
+           "**【常见色彩空间转换模型】**\n"
+           "```\n"
+           "   1. BGR -> 灰度 (Gray):\n"
+           "        Gray = 0.299·R + 0.587·G + 0.114·B\n"
+           "\n"
+           "   2. BGR -> HSV (色调/饱和度/明度):\n"
+           "        V = max(R, G, B)\n"
+           "        S = (V - min(R, G, B)) / V   (若 V ≠ 0)\n"
+           "        H = 60°·(G - B)/(V - min)    (若 V = R)\n"
+           "\n"
+           "   3. BGR -> YCrCb (亮度与色差):\n"
+           "        Y  = 0.299·R + 0.587·G + 0.114·B\n"
+           "        Cr = (R - Y)·0.713 + 128\n"
+           "        Cb = (B - Y)·0.564 + 128\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **code**：转换目标模式（如 BGR2GRAY, BGR2HSV, BGR2Lab 等）。\n\n"
+           "**【工程应用建议】**\n"
+           "- 降维提速：首选 BGR -> GRAY；\n"
+           "- 颜色识别与抗光照反光：首选 BGR -> HSV；\n"
+           "- 肤色检测与光线均衡：首选 BGR -> YCrCb 或 BGR -> Lab。";
 }
 
 bool CvtColorOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -162,12 +179,21 @@ ChannelSplitOp::ChannelSplitOp()
 
 std::string ChannelSplitOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：多色彩空间通道分离提取 (Channel Split)\n\n"
-           "工业机器视觉中，单个通道往往包含比全彩图更关键的对比度特征：\n"
-           "* **HSV.S 通道**：极易去除金属反光；\n"
-           "* **HSV.H 通道**：对光照强度变化具有天然鲁棒性；\n"
-           "* **Lab.L 通道 / YCrCb.Y 通道**：无损剥离色度后的纯净照度信息；\n"
-           "* **BGR 单色通道**：提取特定波长光源（如红光/蓝光打光）下的缺陷特征。";
+    return "### 📘 算子原理：多色彩空间单通道分离提取 (Channel Split)\n\n"
+           "**【核心思想】**\n"
+           "在机器视觉打光检测中，特定单通道往往包含比全彩图更关键的对比度特征：\n"
+           "```\n"
+           "   - BGR.R/G/B 通道: 配合特定单色光源（红光/蓝光）实现特定缺陷的高反差提取\n"
+           "   - HSV.S (饱和度): 极易滤除工件金属表面的高光镜面反光\n"
+           "   - HSV.H (色调):   对光照阴影强弱具备天然的不变性\n"
+           "   - Lab.L / YCrCb.Y: 剥离色度后的高保真纯净灰度亮度信息\n"
+           "```\n\n"
+           "**【数学运算】**\n"
+           "```\n"
+           "   1. 色彩转换:  TargetSpace = ColorConvert(InputBGR)\n"
+           "   2. 通道拆分:  [Ch0, Ch1, Ch2] = Split(TargetSpace)\n"
+           "   3. 动态拉伸:  dst = Normalize(Ch_k, 0, 255)   (若开启 Normalize 选项)\n"
+           "```";
 }
 
 bool ChannelSplitOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

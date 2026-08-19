@@ -101,6 +101,7 @@ void PipelineListWidget::RefreshList()
     if (!_pipelineMgr)
     {
         ui->listSteps->clear();
+        emit StepSelected(-1);
         return;
     }
 
@@ -132,16 +133,28 @@ void PipelineListWidget::RefreshList()
         item->setData(Qt::UserRole, i);
     }
 
+    int targetRow = -1;
     if (savedRow >= 0 && savedRow < ui->listSteps->count())
     {
-        ui->listSteps->setCurrentRow(savedRow);
+        targetRow = savedRow;
     }
     else if (ui->listSteps->count() > 0)
     {
-        ui->listSteps->setCurrentRow(ui->listSteps->count() - 1);
+        targetRow = ui->listSteps->count() - 1;
+    }
+
+    if (targetRow >= 0)
+    {
+        ui->listSteps->setCurrentRow(targetRow);
+    }
+    else
+    {
+        ui->listSteps->setCurrentRow(-1);
     }
 
     _isUpdatingList = false;
+    // 列表刷新后同步发射选中事件，确保右侧属性面板和主视口焦点立刻同步切换
+    emit StepSelected(targetRow);
 }
 
 void PipelineListWidget::OnMoveUpClicked()
@@ -169,7 +182,7 @@ void PipelineListWidget::OnMoveDownClicked()
 void PipelineListWidget::OnRemoveClicked()
 {
     int row = ui->listSteps->currentRow();
-    if (_pipelineMgr && row >= 0)
+    if (_pipelineMgr && row >= 0 && row < _pipelineMgr->GetStepCount())
     {
         _pipelineMgr->RemoveStep(row);
         _pipelineMgr->Execute();

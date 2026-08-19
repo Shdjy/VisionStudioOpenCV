@@ -65,12 +65,22 @@ CylindricalUnrollOp::CylindricalUnrollOp()
 std::string CylindricalUnrollOp::GetPrincipleDoc() const
 {
     return "### 🛢️ 圆柱面曲面展开与重映射原理 (Cylindrical Unrolling)\n\n"
-           "工业流水线中，贴在瓶身、易拉罐、注射器等圆柱体表面的标签与喷码，在正面拍摄时两侧边缘会因圆柱曲率产生严重的压缩变形。\n\n"
-           "**几何投影反演模型**：\n"
-           "1. 设圆柱半径为 $R = \\frac{W}{2} \\cdot \\text{radiusRatio}$，虚拟焦距为 $f = W \\cdot \\text{focalRatio}$；\n"
-           "2. 对展开后平面像素坐标 $(x', y')$，计算对应的圆柱包角 $\\theta = \\frac{x' - cx}{R}$；\n"
-           "3. 将圆柱三维点 $(R\\sin\\theta, y', R\\cos\\theta)$ 经透视投影映射回原拍摄曲面图像点 $(x, y)$；\n"
-           "4. 构建全图反向寻址浮点映射网格 `map_x` 和 `map_y`，调用 `cv::remap` 实现亚像素展开。";
+           "**【核心思想】**\n"
+           "贴在瓶身、易拉罐、针管等圆柱体表面的标签与字符喷码，在正交拍摄时两侧边缘会因圆柱曲率产生严重的非线性压缩变形。通过几何反演重映射建立展开后平面与原曲面坐标的对应关系。\n\n"
+           "**【数学几何反演模型】**\n"
+           "```\n"
+           "   1. 圆柱半径与虚拟焦距:  R = (W / 2) · radiusRatio,   f = W · focalRatio\n"
+           "\n"
+           "   2. 展开平面点 (x', y') 对应圆柱包角:  θ = (x' - cx) / R\n"
+           "\n"
+           "   3. 曲面反向寻址投影公式:\n"
+           "        map_x(x', y') = cx + f · tan(θ)  = cx + f · [ sin(θ) / cos(θ) ]\n"
+           "        map_y(x', y') = cy + (y' - cy) / cos(θ)\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **radiusRatio**：圆柱有效半径占图像半宽的百分比；\n"
+           "- **focalRatio**：虚拟相机等效焦距系数；\n"
+           "- **centerXOffset**：圆柱轴心在视野中的左右像素偏移。";
 }
 
 bool CylindricalUnrollOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -90,114 +100,112 @@ bool CylindricalUnrollOp::Process(const cv::Mat& input, cv::Mat& output, std::st
     if (interpIdx == 1) interp = cv::INTER_NEAREST;
     else if (interpIdx == 2) interp = cv::INTER_CUBIC;
 
-    int w = input.cols;
-    int h = input.rows;
-
-    double cx = w / 2.0 + centerXOffset;
-    double cy = h / 2.0;
-
-    double R = (w / 2.0) * radiusRatio;
-    double f = w * focalRatio;
-
-    cv::Mat mapX(h, w, CV_32FC1);
-    cv::Mat mapY(h, w, CV_32FC1);
-
-    for (int y = 0; y < h; ++y)
+    try
     {
-        float* pMapX = mapX.ptr<float>(y);
-        float* pMapY = mapY.ptr<float>(y);
+        const int w = input.cols;
+        const int h = input.rows;
+        const double cx = (w / 2.0) + centerXOffset;
+        const double cy = h / 2.0;
 
-        double dy = y - cy;
+        const double radius = (w / 2.0) * radiusRatio;
+        const double focal = w * focalRatio;
 
-        for (int x = 0; x < w; ++x)
+        if (radius <= 1.0 || focal <= 1.0)
         {
-            double dx = x - cx;
-            double theta = dx / R;
+            errorMsg = "圆柱展开半径或焦距参数无效";
+            return false;
+        }
 
-            if (std::abs(theta) >= M_PI / 2.0 * 0.98)
-            {
-                pMapX[x] = -1.0f;
-                pMapY[x] = -1.0f;
-            }
-            else
-            {
-                double sinTheta = std::sin(theta);
-                double cosTheta = std::cos(theta);
+        cv::Mat mapX(h, w, CV_32FC1);
+        cv::Mat mapY(h, w, CV_32FC1);
 
-                double denom = R * cosTheta + f - R;
-                if (std::abs(denom) > 1e-4)
+        for (int y = 0; y < h; ++y)
+        {
+            float* pX = mapX.ptr<float>(y);
+            float* pY = mapY.ptr<float>(y);
+            for (int x = 0; x < w; ++x)
+            {
+                double dx = x - cx;
+                double theta = dx / radius;
+
+                if (std::abs(theta) < (CV_PI / 2.0 - 0.05))
                 {
-                    double srcX = cx + (f * R * sinTheta) / denom;
-                    double srcY = cy + (f * dy) / denom;
+                    double srcX = cx + focal * std::tan(theta);
+                    double srcY = cy + (y - cy) / std::cos(theta);
 
-                    pMapX[x] = static_cast<float>(srcX);
-                    pMapY[x] = static_cast<float>(srcY);
+                    pX[x] = static_cast<float>(srcX);
+                    pY[x] = static_cast<float>(srcY);
                 }
                 else
                 {
-                    pMapX[x] = -1.0f;
-                    pMapY[x] = -1.0f;
+                    pX[x] = -1.0f;
+                    pY[x] = -1.0f;
                 }
             }
         }
-    }
 
-    cv::remap(input, output, mapX, mapY, interp, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
-    return true;
+        cv::remap(input, output, mapX, mapY, interp, cv::BORDER_CONSTANT, cv::Scalar::all(0));
+        return true;
+    }
+    catch (const cv::Exception& e)
+    {
+        errorMsg = e.what();
+        return false;
+    }
 }
 
 std::string CylindricalUnrollOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    std::ostringstream ss;
-    double rad = _params[0].GetDouble() / 100.0;
-    double focal = _params[1].GetDouble() / 100.0;
-    int offset = _params[2].GetInt();
+    double radiusRatio = _params[0].GetDouble() / 100.0;
+    double focalRatio = _params[1].GetDouble() / 100.0;
+    int centerXOffset = _params[2].GetInt();
     int interpIdx = _params[3].GetInt();
 
-    std::string interpStr = (interpIdx == 1) ? "cv::INTER_NEAREST" : ((interpIdx == 2) ? "cv::INTER_CUBIC" : "cv::INTER_LINEAR");
-
-    ss << "// 🛢️ 圆柱面展开与几何重映射 (Cylindrical Unrolling)\n";
-    ss << "cv::Mat mapX(" << inVar << ".rows, " << inVar << ".cols, CV_32FC1);\n";
-    ss << "cv::Mat mapY(" << inVar << ".rows, " << inVar << ".cols, CV_32FC1);\n";
-    ss << "double cx = " << inVar << ".cols / 2.0 + (" << offset << ");\n";
-    ss << "double cy = " << inVar << ".rows / 2.0;\n";
-    ss << "double R = (" << inVar << ".cols / 2.0) * " << std::fixed << std::setprecision(2) << rad << ";\n";
-    ss << "double f = " << inVar << ".cols * " << focal << ";\n";
-    ss << "for (int y = 0; y < " << inVar << ".rows; ++y) {\n";
-    ss << "    float* pX = mapX.ptr<float>(y);\n";
-    ss << "    float* pY = mapY.ptr<float>(y);\n";
-    ss << "    for (int x = 0; x < " << inVar << ".cols; ++x) {\n";
-    ss << "        double theta = (x - cx) / R;\n";
-    ss << "        if (std::abs(theta) >= 1.54) { pX[x] = -1; pY[x] = -1; continue; }\n";
-    ss << "        double denom = R * std::cos(theta) + f - R;\n";
-    ss << "        pX[x] = (float)(cx + (f * R * std::sin(theta)) / denom);\n";
-    ss << "        pY[x] = (float)(cy + (f * (y - cy)) / denom);\n";
-    ss << "    }\n";
-    ss << "}\n";
-    ss << "cv::remap(" << inVar << ", " << outVar << ", mapX, mapY, " << interpStr << ", cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));\n";
+    std::stringstream ss;
+    ss << "// 圆柱曲面展开参数配置\n"
+       << "double radiusRatio = " << radiusRatio << ";\n"
+       << "double focalRatio = " << focalRatio << ";\n"
+       << "int centerXOffset = " << centerXOffset << ";\n"
+       << "int interp = " << (interpIdx == 1 ? "cv::INTER_NEAREST" : (interpIdx == 2 ? "cv::INTER_CUBIC" : "cv::INTER_LINEAR")) << ";\n"
+       << "int w = " << inVar << ".cols, h = " << inVar << ".rows;\n"
+       << "double cx = (w / 2.0) + centerXOffset, cy = h / 2.0;\n"
+       << "double radius = (w / 2.0) * radiusRatio, focal = w * focalRatio;\n"
+       << "cv::Mat mapX(h, w, CV_32FC1), mapY(h, w, CV_32FC1);\n"
+       << "for (int y = 0; y < h; ++y) {\n"
+       << "    for (int x = 0; x < w; ++x) {\n"
+       << "        double theta = (x - cx) / radius;\n"
+       << "        if (std::abs(theta) < (CV_PI / 2.0 - 0.05)) {\n"
+       << "            mapX.at<float>(y, x) = static_cast<float>(cx + focal * std::tan(theta));\n"
+       << "            mapY.at<float>(y, x) = static_cast<float>(cy + (y - cy) / std::cos(theta));\n"
+       << "        } else { mapX.at<float>(y, x) = -1.0f; mapY.at<float>(y, x) = -1.0f; }\n"
+       << "    }\n"
+       << "}\n"
+       << "cv::remap(" << inVar << ", " << outVar << ", mapX, mapY, interp, cv::BORDER_CONSTANT, cv::Scalar::all(0));";
     return ss.str();
 }
 
 std::string CylindricalUnrollOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    std::ostringstream ss;
-    double rad = _params[0].GetDouble() / 100.0;
-    double focal = _params[1].GetDouble() / 100.0;
-    int offset = _params[2].GetInt();
+    double radiusRatio = _params[0].GetDouble() / 100.0;
+    double focalRatio = _params[1].GetDouble() / 100.0;
+    int centerXOffset = _params[2].GetInt();
     int interpIdx = _params[3].GetInt();
 
-    std::string interpStr = (interpIdx == 1) ? "cv2.INTER_NEAREST" : ((interpIdx == 2) ? "cv2.INTER_CUBIC" : "cv2.INTER_LINEAR");
-
-    ss << "# 🛢️ 圆柱面展开与几何重映射 (Cylindrical Unrolling)\n";
-    ss << "h, w = " << inVar << ".shape[:2]\n";
-    ss << "cx, cy = w / 2.0 + " << offset << ", h / 2.0\n";
-    ss << "R, f = (w / 2.0) * " << std::fixed << std::setprecision(2) << rad << ", w * " << focal << "\n";
-    ss << "grid_y, grid_x = np.indices((h, w), dtype=np.float32)\n";
-    ss << "theta = (grid_x - cx) / R\n";
-    ss << "denom = R * np.cos(theta) + f - R\n";
-    ss << "map_x = np.where(np.abs(theta) < 1.54, cx + (f * R * np.sin(theta)) / denom, -1).astype(np.float32)\n";
-    ss << "map_y = np.where(np.abs(theta) < 1.54, cy + (f * (grid_y - cy)) / denom, -1).astype(np.float32)\n";
-    ss << outVar << " = cv2.remap(" << inVar << ", map_x, map_y, " << interpStr << ", borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))\n";
+    std::stringstream ss;
+    ss << "# 圆柱曲面展开参数配置\n"
+       << "radius_ratio = " << radiusRatio << "\n"
+       << "focal_ratio = " << focalRatio << "\n"
+       << "center_x_offset = " << centerXOffset << "\n"
+       << "interp = " << (interpIdx == 1 ? "cv2.INTER_NEAREST" : (interpIdx == 2 ? "cv2.INTER_CUBIC" : "cv2.INTER_LINEAR")) << "\n"
+       << "h, w = " << inVar << ".shape[:2]\n"
+       << "cx, cy = (w / 2.0) + center_x_offset, h / 2.0\n"
+       << "radius, focal = (w / 2.0) * radius_ratio, w * focal_ratio\n"
+       << "grid_x, grid_y = np.meshgrid(np.arange(w), np.arange(h))\n"
+       << "theta = (grid_x - cx) / radius\n"
+       << "valid_mask = np.abs(theta) < (np.pi / 2.0 - 0.05)\n"
+       << "map_x = np.where(valid_mask, (cx + focal * np.tan(theta)).astype(np.float32), -1.0)\n"
+       << "map_y = np.where(valid_mask, (cy + (grid_y - cy) / np.cos(theta)).astype(np.float32), -1.0)\n"
+       << outVar << " = cv2.remap(" << inVar << ", map_x, map_y, interp, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))";
     return ss.str();
 }
 
@@ -208,22 +216,22 @@ RansacFitCircleOp::RansacFitCircleOp()
 {
     OpParameter cannyLowParam;
     cannyLowParam.Name = "cannyLow";
-    cannyLowParam.DisplayName = "Canny 边缘低阈值 (Canny Low)";
-    cannyLowParam.Tooltip = "用于提取拟合候选边缘点的 Canny 滞后滞阈值下限";
+    cannyLowParam.DisplayName = "边缘提取低阈值 (Canny Low)";
     cannyLowParam.Type = ParamType::IntSlider;
-    cannyLowParam.Value = 40;
+    cannyLowParam.Value = 50;
     cannyLowParam.MinValue = 5;
     cannyLowParam.MaxValue = 255;
+    cannyLowParam.Step = 5;
     _params.push_back(cannyLowParam);
 
     OpParameter cannyHighParam;
     cannyHighParam.Name = "cannyHigh";
-    cannyHighParam.DisplayName = "Canny 边缘高阈值 (Canny High)";
-    cannyHighParam.Tooltip = "用于提取拟合候选边缘点的 Canny 滞后滞阈值上限";
+    cannyHighParam.DisplayName = "边缘提取高阈值 (Canny High)";
     cannyHighParam.Type = ParamType::IntSlider;
-    cannyHighParam.Value = 120;
+    cannyHighParam.Value = 150;
     cannyHighParam.MinValue = 10;
-    cannyHighParam.MaxValue = 255;
+    cannyHighParam.MaxValue = 300;
+    cannyHighParam.Step = 5;
     _params.push_back(cannyHighParam);
 
     OpParameter minRParam;
@@ -248,23 +256,23 @@ RansacFitCircleOp::RansacFitCircleOp()
 
     OpParameter maxIterParam;
     maxIterParam.Name = "maxIterations";
-    maxIterParam.DisplayName = "RANSAC 迭代次数 (Max Iters)";
-    maxIterParam.Tooltip = "随机抽样一致性算法的最大迭代抽样轮数";
+    maxIterParam.DisplayName = "RANSAC 迭代次数 (Iterations)";
     maxIterParam.Type = ParamType::IntSlider;
-    maxIterParam.Value = 250;
-    maxIterParam.MinValue = 20;
+    maxIterParam.Value = 300;
+    maxIterParam.MinValue = 50;
     maxIterParam.MaxValue = 2000;
+    maxIterParam.Step = 50;
     _params.push_back(maxIterParam);
 
-    OpParameter distThreshParam;
-    distThreshParam.Name = "inlierDist";
-    distThreshParam.DisplayName = "内点距离容差 (Inlier Dist px)";
-    distThreshParam.Tooltip = "边缘点到圆周的最远判定距离 (px)，小于此距离的点视为内点";
-    distThreshParam.Type = ParamType::DoubleSlider;
-    distThreshParam.Value = 3.0;
-    distThreshParam.MinValue = 0.5;
-    distThreshParam.MaxValue = 30.0;
-    _params.push_back(distThreshParam);
+    OpParameter inlierDistParam;
+    inlierDistParam.Name = "inlierDist";
+    inlierDistParam.DisplayName = "内点容差阈值 (Inlier Distance px)";
+    inlierDistParam.Type = ParamType::DoubleSlider;
+    inlierDistParam.Value = 2.0;
+    inlierDistParam.MinValue = 0.5;
+    inlierDistParam.MaxValue = 10.0;
+    inlierDistParam.Step = 0.5;
+    _params.push_back(inlierDistParam);
 
     OpParameter drawModeParam;
     drawModeParam.Name = "drawOverlay";
@@ -278,14 +286,19 @@ RansacFitCircleOp::RansacFitCircleOp()
 
 std::string RansacFitCircleOp::GetPrincipleDoc() const
 {
-    return "### 🎯 RANSAC 鲁棒圆拟合原理 (RANSAC Robust Circle Fitting)\n\n"
-           "工业瓶盖、轴承、圆形孔径检测中，由于光照反光、毛刺、油污或部分边缘遮挡，直接使用传统最小二乘法拟合圆极易产生巨大偏差。\n\n"
-           "**RANSAC 核心流程**：\n"
-           "1. 提取边缘轮廓点集 $S = \\{ (x_i, y_i) \\}$；\n"
-           "2. 随机抽取 3 个不共线样本点，建立外接圆方程 $(x-cx)^2 + (y-cy)^2 = R^2$；\n"
-           "3. 计算所有边缘点到该圆周的欧氏距离 $d_i = |\\sqrt{(x_i-cx)^2 + (y_i-cy)^2} - R|$；\n"
-           "4. 统计内点集合 $I = \\{ p_i \\mid d_i \\le \\text{inlierDist} \\}$，并在多次迭代中保留内点数量最多的最优模型；\n"
-           "5. 使用最优模型的所有内点执行最小二乘精确校准，输出高精度的圆心坐标与半径。";
+    return "### 🎯 RANSAC 鲁棒圆拟合原理 (RANSAC Circle Fitting)\n\n"
+           "**【核心思想】**\n"
+           "在工件反光、毛刺、油污或边缘局部遮挡时，传统最小二乘法极易被离群噪点拉偏。RANSAC（随机抽样一致性）通过随机三点建立候选圆模型，以最大内点投票机制锁定真实工件圆周，最后对所有内点执行高精度最小二乘精修。\n\n"
+           "**【数学模型 / 迭代流程】**\n"
+           "```\n"
+           "   1. 随机抽样: 随机抽取 3 个不共线边缘点 p₁, p₂, p₃ 求解三点共圆 (cx, cy, R)\n"
+           "   2. 距离度量: 点到圆周欧氏径向残差 d_i = | √[(x_i - cx)² + (y_i - cy)²] - R |\n"
+           "   3. 内点投票: 统计 { p_i | d_i ≤ inlierDist }，保留内点最多的模型\n"
+           "   4. 最小二乘精修: 对全部有效内点求解超定方程矩阵，获得亚像素圆心与半径\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **inlierDist**：内点判定容差门限（px）；\n"
+           "- **maxIterations**：RANSAC 随机采样迭代次数。";
 }
 
 bool RansacFitCircleOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -669,12 +682,15 @@ BarcodeQrOp::BarcodeQrOp()
 
 std::string BarcodeQrOp::GetPrincipleDoc() const
 {
-    return "### 🏷️ 条码与二维码识别原理 (Barcode & QR Code Recognition)\n\n"
+    return "### 🏷️ 条码与二维码定位识别 (Barcode & QR Code Recognition)\n\n"
+           "**【核心思想】**\n"
            "工业生产线中，产品批次、包装序列号和药品追溯广泛采用一维条形码 (Code128/EAN) 和二维 DataMatrix / QR 码。\n\n"
-           "**检测与解码流程**：\n"
-           "1. 图像预处理与灰度梯度分析，寻找具有显著黑白交替特征的定位角点与寻像图形 (Finder Patterns)；\n"
-           "2. 提取四边形透视顶点坐标并做网格单应性校正采样；\n"
-           "3. 按照 Reed-Solomon 纠错算法解码数据内容，输出字符串与四边形角点位置。";
+           "**【检测与解码流程】**\n"
+           "```\n"
+           "   1. 图形定位: 提取特征黑白方块比例 (1:1:3:1:1 寻像图形 Finder Patterns)\n"
+           "   2. 透视矫正: 提取四边形顶点，计算单应矩阵并进行正交采样网格校正\n"
+           "   3. 纠错解码: 采用 Reed-Solomon 纠错算法还原位流数据并解析字符串内容\n"
+           "```";
 }
 
 bool BarcodeQrOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -920,13 +936,17 @@ SkeletonThinningOp::SkeletonThinningOp()
 
 std::string SkeletonThinningOp::GetPrincipleDoc() const
 {
-    return "### 🦴 骨架提取与图像细化原理 (Skeletonization & Thinning)\n\n"
-           "在工业线缆检测、焊缝检测、印字字符点阵和微小裂纹分析中，需要提取线状物体的单像素中心拓扑骨架。\n\n"
-           "**Zhang-Suen 细化算法原理**：\n"
-           "对二值图像的前景像素点 $P_1$ 及其 8-邻域 $(P_2, \\dots, P_9)$，在两个连续的子迭代阶段判定：\n"
-           "1. $2 \\le B(P_1) \\le 6$（非零邻域个数位于 2 到 6 之间）；\n"
-           "2. $A(P_1) = 1$（顺时针遍历 $0 \\to 1$ 的过渡次数恰好为 1，确保连通性不被破坏）；\n"
-           "3. 消除边缘像素同时保留端点与分支拓扑结构，重复迭代直至骨架收敛。";
+    return "### 🦴 骨架提取与细化算法 (Skeletonization & Thinning)\n\n"
+           "**【核心思想】**\n"
+           "在工业线缆检测、焊缝检测、印字字符点阵和微小裂纹分析中，通过拓扑骨架细化将二值斑块连通域逐步收缩为保持拓扑连通性的单像素中心线。\n\n"
+           "**【Zhang-Suen 细化两阶段子迭代判决】**\n"
+           "```\n"
+           "   对中心前景点 P₁ 及其 8-邻域 (P₂ ~ P₉ 顺时针排列):\n"
+           "     1. 邻域非零点数:  2 ≤ B(P₁) ≤ 6\n"
+           "     2. 0->1 过渡次数: A(P₁) = 1 (确保骨架连通性不被破坏)\n"
+           "     3. 子迭代 1: P₂ · P₄ · P₆ = 0  且  P₄ · P₆ · P₈ = 0 (消除东/南边缘点)\n"
+           "     4. 子迭代 2: P₂ · P₄ · P₈ = 0  且  P₂ · P₆ · P₈ = 0 (消除西/北边缘点)\n"
+           "```";
 }
 
 bool SkeletonThinningOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

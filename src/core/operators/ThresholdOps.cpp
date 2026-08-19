@@ -41,10 +41,30 @@ ThresholdOp::ThresholdOp()
 
 std::string ThresholdOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：基础阈值二值化 (threshold)\n\n"
-           "将单通道灰度图像转化为黑白二值图：\n"
-           "* **THRESH_BINARY**：$dst(x, y) = \\begin{cases} maxval & \\text{if } src(x, y) > thresh \\\\ 0 & \\text{otherwise} \\end{cases}$\n"
-           "* **THRESH_BINARY_INV**：$dst(x, y) = \\begin{cases} 0 & \\text{if } src(x, y) > thresh \\\\ maxval & \\text{otherwise} \\end{cases}$";
+    return "### 📘 算子原理：基础灰度阈值二值化 (threshold)\n\n"
+           "**【核心思想】**\n"
+           "通过固定的灰度分界线（阈值 Threshold），将连续多级灰度图像映射为高对比度的黑白二值或阶段截断图像，实现前景目标与背景的分离。\n\n"
+           "**【五种经典二值化数学模型】**\n"
+           "```\n"
+           "   1. THRESH_BINARY (标准二值化):\n"
+           "        dst(x, y) = maxval    (若 src(x, y) > thresh)\n"
+           "        dst(x, y) = 0         (若 src(x, y) ≤ thresh)\n"
+           "\n"
+           "   2. THRESH_BINARY_INV (反向二值化):\n"
+           "        dst(x, y) = 0         (若 src(x, y) > thresh)\n"
+           "        dst(x, y) = maxval    (若 src(x, y) ≤ thresh)\n"
+           "\n"
+           "   3. THRESH_TRUNC (上限截断):\n"
+           "        dst(x, y) = thresh    (若 src(x, y) > thresh)\n"
+           "        dst(x, y) = src(x, y) (若 src(x, y) ≤ thresh)\n"
+           "\n"
+           "   4. THRESH_TOZERO (低于阈值置零):\n"
+           "        dst(x, y) = src(x, y) (若 src(x, y) > thresh)\n"
+           "        dst(x, y) = 0         (若 src(x, y) ≤ thresh)\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **thresh**：分割门限灰度值（0~255）；\n"
+           "- **maxval**：二值化后前景输出的最大赋值（通常为 255 纯白）。";
 }
 
 bool ThresholdOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -140,8 +160,27 @@ OtsuThresholdOp::OtsuThresholdOp()
 
 std::string OtsuThresholdOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：大津自适应阈值 (Otsu Threshold)\n\n"
-           "根据整幅图像灰度直方图的**类间方差最大化**准则，自动计算出最佳全局全局二值化阈值。";
+    return "### 📘 算子原理：大津法最大类间方差自适应阈值 (Otsu Threshold)\n\n"
+           "**【核心思想】**\n"
+           "大津算法（OTSU）是一种自动计算二值化最佳阈值的统计优化方法。基于整幅图像的全局直方图，遍历所有可能阈值，寻找使前景类与背景类之间方差（差异度）最大的分界点。\n\n"
+           "**【数学模型 / 方差优化准则】**\n"
+           "```\n"
+           "   目标函数:  T* = arg max { σ_B²(t) }\n"
+           "                     t\n"
+           "\n"
+           "   类间方差:  σ_B²(t) = ω₀(t) · ω₁(t) · [ μ₀(t) - μ₁(t) ]²\n"
+           "\n"
+           "   其中:\n"
+           "     - ω₀(t), ω₁(t): 背景与前景两类像素占全图的概率比例;\n"
+           "     - μ₀(t), μ₁(t): 背景与前景两类像素的平均灰度值;\n"
+           "     - μ_total: 全图总平均灰度值。\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **maxval**：二值化前景最大赋值（默认 255）；\n"
+           "- **invert**：是否反转二值化输出（黑白翻转）。\n\n"
+           "**【工程应用建议】**\n"
+           "- 适合场景：图像直方图呈现明显双峰分布（即前景与背景对比显著）时的全自动二值化；\n"
+           "- 局限：若目标极小（占比小于 5%）或光照严重不均，单一直方图双峰退化，建议改用局部自适应阈值。";
 }
 
 bool OtsuThresholdOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -244,8 +283,23 @@ AdaptiveThresholdOp::AdaptiveThresholdOp()
 
 std::string AdaptiveThresholdOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：局部自适应阈值 (adaptiveThreshold)\n\n"
-           "针对图像中**光照不均匀**、局部阴影问题，对图像每个像素独立计算其局部邻域的加权均值减去常数 $C$ 作为该像素的专属阈值。";
+    return "### 📘 算子原理：局部自适应动态阈值 (adaptiveThreshold)\n\n"
+           "**【核心思想】**\n"
+           "针对工业生产中光照不均、表面反光或局部阴影严重的场景，不再使用全局统一阈值，而是对图像中每个像素根据其局部 blockSize×blockSize 邻域单独计算动态门限。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "   1. 计算局部基准均值:\n"
+           "        T(x, y) = Mean_Block(x, y) - C        (若选用 Mean 模式)\n"
+           "        T(x, y) = Gaussian_Block(x, y) - C    (若选用 Gaussian 模式)\n"
+           "\n"
+           "   2. 像素判定:\n"
+           "        dst(x, y) = maxval    (若 src(x, y) > T(x, y))\n"
+           "        dst(x, y) = 0         (若 src(x, y) ≤ T(x, y))\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **blockSize**：局部统计邻域大小，必须为奇数（如 11, 21, 31），需大于目标物体的线宽；\n"
+           "- **C**：常数微调偏移量，用于抑制平坦背景区域的虚假颗粒噪点；\n"
+           "- **method**：均值加权或高斯正态加权。";
 }
 
 bool AdaptiveThresholdOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -363,9 +417,22 @@ InRangeOp::InRangeOp()
 
 std::string InRangeOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：颜色区间二值化 (inRange)\n\n"
-           "基于 HSV 颜色空间提取特定颜色物体（如提取绿色目标）：\n"
-           "$$dst(x, y) = \\begin{cases} 255 & \\text{if } lower(x,y) \\le src(x,y) \\le upper(x,y) \\\\ 0 & \\text{otherwise} \\end{cases}$$";
+    return "### 📘 算子原理：HSV 空间颜色区间分割 (inRange)\n\n"
+           "**【核心思想】**\n"
+           "RGB 颜色空间易受环境光强干扰，转换至 HSV（色调 Hue、饱和度 Saturation、亮度 Value）空间后，可通过设定特定颜色范围直接精确提取目标彩色区域。\n\n"
+           "**【数学模型 / 逻辑判决公式】**\n"
+           "```\n"
+           "   dst(x, y) = 255   (若 lowerBound ≤ HSV(x, y) ≤ upperBound)\n"
+           "   dst(x, y) = 0     (其他情况)\n"
+           "\n"
+           "   判决条件: (hMin ≤ H ≤ hMax) ∧ (sMin ≤ S ≤ sMax) ∧ (vMin ≤ V ≤ vMax)\n"
+           "```\n\n"
+           "**【常见颜色 H 通道经验范围 (0~180)】**\n"
+           "- 红色: 0~10 或 156~180\n"
+           "- 橙色: 11~25\n"
+           "- 黄色: 26~34\n"
+           "- 绿色: 35~85\n"
+           "- 蓝色: 100~124";
 }
 
 bool InRangeOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

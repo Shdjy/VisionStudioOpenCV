@@ -37,10 +37,15 @@ LUTOp::LUTOp()
 
 std::string LUTOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：LUT 颜色查找表与科学伪彩色 (applyColorMap & LUT)\n\n"
-           "基于色彩映射表将单通道灰度数据非线性转换为三通道伪彩色图像：\n"
-           "* **热力图可视化**：使用 `COLORMAP_JET` 或 `COLORMAP_TURBO` 快速凸显微弱亮度差异；\n"
-           "* **医学与红外热成像**：使用 `COLORMAP_HOT` / `COLORMAP_BONE` 强化工业无损探伤与温度梯度分布。";
+    return "### 📘 算子原理：LUT 颜色查找表与伪彩色 (applyColorMap)\n\n"
+           "**【核心思想】**\n"
+           "通过预设的 256 级色彩映射表（Look-Up Table），将单通道灰度强度映射为高视觉辨识度的彩色谱系，便于人眼迅速洞察微弱缺陷与温度梯度。\n\n"
+           "**【常见工业色谱模型】**\n"
+           "```\n"
+           "   - COLORMAP_JET / TURBO: 经典彩虹热力谱 (蓝->青->黄->红)，用于应力与红外分布\n"
+           "   - COLORMAP_HOT / BONE:   黑体辐射谱与骨骼透视谱，用于 X-Ray 无损探伤\n"
+           "   - COLORMAP_VIRIDIS:     感知均匀色阶，在黑白打印下仍保持单调对比度\n"
+           "```";
 }
 
 bool LUTOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -120,10 +125,20 @@ PerspectiveTransformOp::PerspectiveTransformOp()
 
 std::string PerspectiveTransformOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：透视变换与单应性投影 (warpPerspective)\n\n"
-           "基于 $3 \\times 3$ 单应性变换矩阵 $H$ 纠正倾斜相机的透视畸变：\n"
-           "$$\\begin{bmatrix} x' \\\\ y' \\\\ 1 \\end{bmatrix} = H \\begin{bmatrix} x \\\\ y \\\\ 1 \\end{bmatrix}$$\n"
-           "实现对倾斜拍摄的铭牌、二维码、输送带工件进行鸟瞰图正射校准。";
+    return "### 📘 算子原理：透视单应性变换与几何校正 (warpPerspective)\n\n"
+           "**【核心思想】**\n"
+           "利用 3×3 齐次单应性投影变换矩阵（Homography Matrix），消除相机倾斜拍摄引起的近大远小梯形畸变，正射还原真实矩形几何尺寸。\n\n"
+           "**【数学模型 / 3×3 单应性投影公式】**\n"
+           "```\n"
+           "   ┌ x' ┐   ┌ h₀₀  h₀₁  h₀₂ ┐   ┌ x ┐\n"
+           "   │ y' │ = │ h₁₀  h₁₁  h₁₂ │ · │ y │\n"
+           "   └ 1  ┘   └ h₂₀  h₂₁  h₂₂ ┘   └ 1 ┘\n"
+           "\n"
+           "   真实物理坐标: X_dst = x' / (h₂₀·x + h₂₁·y + h₂₂)\n"
+           "                Y_dst = y' / (h₂₀·x + h₂₁·y + h₂₂)\n"
+           "```\n\n"
+           "**【工程应用建议】**\n"
+           "- 传送带斜视纠偏：将流水线斜置相机采集的零件纠正为正俯视图。";
 }
 
 bool PerspectiveTransformOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -227,9 +242,19 @@ PolarTransformOp::PolarTransformOp()
 
 std::string PolarTransformOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：极坐标变换与圆周展开 (warpPolar)\n\n"
-           "将以图像中心为极点的圆形区域映射到直角极坐标空间 $(r, \\theta)$：\n"
-           "* **圆环字符识别与瑕疵检测**：将圆盘轴承、圆形瓶盖或齿轮表面的圆周曲线展开为平直水平矩形，使标准 OCR 和缺陷检测算法可直接处理。";
+    return "### 📘 算子原理：极坐标变换与圆周曲面展开 (warpPolar)\n\n"
+           "**【核心思想】**\n"
+           "将以图像中心为极点的圆盘/圆环区域映射到直角笛卡尔极坐标空间 (r, θ)，将环形文字与边缘弧度拉伸为水平矩形条。\n\n"
+           "**【数学模型 / 极坐标变换方程】**\n"
+           "```\n"
+           "   x = cx + r · cos(θ)\n"
+           "   y = cy + r · sin(θ)\n"
+           "\n"
+           "   其中: r ∈ [0, maxRadius],  θ ∈ [0, 2π]\n"
+           "```\n\n"
+           "**【工程应用建议】**\n"
+           "- 瓶盖刻字 OCR：将环形圆周印字展开为水平文字行以便标准 OCR 识别；\n"
+           "- 轴承与齿轮齿面瑕疵检测。";
 }
 
 bool PolarTransformOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -304,10 +329,14 @@ ImagePyramidOp::ImagePyramidOp()
 
 std::string ImagePyramidOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：图像金字塔与多尺度表达 (pyrDown & pyrUp)\n\n"
-           "* **pyrDown**：先用高斯核卷积平滑，再剔除偶数行和偶数列，图像宽高减半；\n"
-           "* **pyrUp**：在行列插入零像素后进行插值平滑，图像宽高翻倍；\n"
-           "* 用于机器视觉中由粗到精的多分辨率快速模板匹配与尺度空间构建。";
+    return "### 📘 算子原理：多分辨率图像金字塔 (pyrDown & pyrUp)\n\n"
+           "**【核心思想】**\n"
+           "构建自底向上空间分辨率逐级递减的尺度空间序列，用于粗到细（Coarse-to-Fine）多尺度加速搜索。\n\n"
+           "**【数学运算流程】**\n"
+           "```\n"
+           "   1. pyrDown (下采样 1/2): 先经 5×5 高斯滤波平滑降噪，再剔除所有偶数行和偶数列\n"
+           "   2. pyrUp   (上采样 2x):  在各行列间插入 0 像素，再用 5×5 放大核进行内插卷积恢复\n"
+           "```";
 }
 
 bool ImagePyramidOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -365,9 +394,15 @@ ConnectedComponentsOp::ConnectedComponentsOp()
 std::string ConnectedComponentsOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：连通域分析与几何统计 (connectedComponentsWithStats)\n\n"
-           "对二值图像执行两遍扫描连通域标记：\n"
-           "* **输出多色标签图**：为每个独立连通块赋予唯一伪彩，快速辨识紧密排列目标；\n"
-           "* **统计量计算**：输出每个连通块的面积 $Area$、外接矩形与重心 $Centroid$。";
+           "**【核心思想】**\n"
+           "基于二值图像两遍扫描标记算法，为每个相互独立的几何连通块分配唯一的整型标签，并一次性提取面积、外接包围盒及物理质心等几何拓扑测量量。\n\n"
+           "**【输出统计量矩阵】**\n"
+           "```\n"
+           "   - CC_STAT_AREA:    连通块内前景像素总点数\n"
+           "   - CC_STAT_LEFT/TOP: 外接正矩形左上角坐标\n"
+           "   - CC_STAT_WIDTH/HEIGHT: 外接矩形长宽\n"
+           "   - Centroids: (cx, cy) 亚像素物理质心重心\n"
+           "```";
 }
 
 bool ConnectedComponentsOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -491,9 +526,19 @@ DistanceTransformOp::DistanceTransformOp()
 std::string DistanceTransformOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：图像距离变换 (distanceTransform)\n\n"
-           "计算二值图每个像素点到最近背景零像素的最小距离：\n"
-           "* **中心定位与骨架提取**：亮度最高的像素点即为工件最大内切圆圆心与厚度主轴中心；\n"
-           "* **分水岭算法核心**：为分水岭算法提供前景精准种子点。";
+           "**【核心思想】**\n"
+           "计算二值图像中每个前景像素到最近背景边界（零像素）的欧氏/曼哈顿物理几何距离，生成距离场热力图。\n\n"
+           "**【数学模型 / 距离度量定义】**\n"
+           "```\n"
+           "   dst(x, y) =   min   { || (x - x_b, y - y_b) ||_p }\n"
+           "               (x_b,y_b)∈Background\n"
+           "\n"
+           "   - DIST_L2 (欧氏距离):   d = √[ (Δx)² + (Δy)² ]\n"
+           "   - DIST_L1 (曼哈顿距离): d = |Δx| + |Δy|\n"
+           "   - DIST_C  (切比雪夫):   d = max( |Δx|, |Δy| )\n"
+           "```\n\n"
+           "**【工程应用建议】**\n"
+           "- 寻找最大内切圆圆心与壁厚测量、分水岭算法前景种子提取。";
 }
 
 bool DistanceTransformOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -573,9 +618,16 @@ FitLineOp::FitLineOp()
 std::string FitLineOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：亚像素稳健直线拟合 (fitLine)\n\n"
-           "通过 M-估计极小化点集到拟合直线的加权残差距离：\n"
-           "$$\\min \\sum \\rho(d_i)$$\n"
-           "在工业尺寸测量中即使存在毛刺或划痕噪点，依然能够稳定输出真实边缘直线方程。";
+           "**【核心思想】**\n"
+           "通过 M-估计（M-estimator）极小化点集到待定直线的加权残差泛函，抑制离群毛刺与划痕噪点，高精度输出直线的单位方向向量 (vx, vy) 与穿过参考点 (x0, y0)。\n\n"
+           "**【数学模型 / M-估计残差极小化】**\n"
+           "```\n"
+           "   目标函数:  min ∑ ρ( d_i )\n"
+           "\n"
+           "   其中 d_i 为点 (x_i, y_i) 到直线的垂直欧氏距离;\n"
+           "   - DIST_L2:    ρ(r) = 0.5 · r²          (标准高斯无噪声最小二乘)\n"
+           "   - DIST_HUBER: ρ(r) = r²/2 (若 |r|≤c) 或 c·(|r| - c/2) (抗外点干扰)\n"
+           "```";
 }
 
 bool FitLineOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -696,9 +748,13 @@ InpaintOp::InpaintOp()
 std::string InpaintOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：数字图像无痕修复 (inpaint)\n\n"
-           "基于结构与纹理传播偏微分方程填充瑕疵缺损区域：\n"
-           "* **INPAINT_TELEA**：沿等照度线梯度方向由外向内插值加权；\n"
-           "* **INPAINT_NS**：模拟流体力学流函数传播平滑曲率，消除划痕与水印。";
+           "**【核心思想】**\n"
+           "基于边界梯度与等照度线向内传播的偏微分方程，无缝填补掩膜覆盖的高光反光区、表面划痕及印刷水印。\n\n"
+           "**【常见修复算法】**\n"
+           "```\n"
+           "   - INPAINT_TELEA: 基于快速行进法 (Fast Marching Method, FMM) 沿平滑等照度方向逐步推进\n"
+           "   - INPAINT_NS:    基于 Navier-Stokes 流体力学方程守恒平滑传播拉普拉斯曲率场\n"
+           "```";
 }
 
 bool InpaintOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -795,9 +851,13 @@ BoxFilterOp::BoxFilterOp()
 std::string BoxFilterOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：方框盒式滤波 (boxFilter)\n\n"
-           "基于积分图实现快速常数时间 $O(1)$ 邻域积分卷积平滑：\n"
-           "* **归一化模式**：等价于均值平滑；\n"
-           "* **非归一化模式**：输出邻域像素累加和，用于局部能量与特征密度分析。";
+           "**【核心思想】**\n"
+           "采用常数阶时间复杂度 O(1) 积分图加速，计算矩形窗口内的像素和或均值。\n\n"
+           "**【数学运算模式】**\n"
+           "```\n"
+           "   - 归一化模式 (normalize=true):   dst(x, y) = [ 1 / (kw · kh) ] · ∑ I(x+i, y+j) (等价均值滤波)\n"
+           "   - 非归一化模式 (normalize=false): dst(x, y) = ∑ I(x+i, y+j) (用于快速统计局部能量和)\n"
+           "```";
 }
 
 bool BoxFilterOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -871,9 +931,13 @@ NoiseInjectionOp::NoiseInjectionOp()
 std::string NoiseInjectionOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：工业机器视觉仿真加噪 (Noise Injection)\n\n"
-           "模拟工业产线恶劣成像环境（打光闪烁、传感器热噪、粉尘污渍）：\n"
-           "* **椒盐噪声**：随机黑白二值坏点，用于检验中值滤波器的去除效果；\n"
-           "* **高斯噪声**：正态分布热电噪声，用于检验双边与高斯滤波器的平滑能力。";
+           "**【核心思想】**\n"
+           "模拟工业产线严苛复杂的现场成像工况（如相机感光芯片热噪、粉尘污渍遮挡、电磁干扰脉冲），验证算法流水线的抗噪鲁棒性。\n\n"
+           "**【常见噪声数学模型】**\n"
+           "```\n"
+           "   - 椒盐脉冲噪声: 以概率 p 随机将像素置为纯黑 (0) 或纯白 (255)\n"
+           "   - 加性高斯白噪声: I_noisy(x, y) = I(x, y) + N(0, σ²)\n"
+           "```";
 }
 
 bool NoiseInjectionOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

@@ -152,11 +152,16 @@ InteractiveMaskOp::InteractiveMaskOp()
 
 std::string InteractiveMaskOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：交互式掩码创建与局部作用 (Interactive Mask ROI)\n\n"
-           "掩码（Mask）是工业机器视觉中控制算法计算区域的核心工具：\n"
-           "* **几何形状掩码**：在图像指定坐标生成矩形、椭圆、圆环（带内径比例）、正多边形（3~12 边）或带角度旋转矩形的 8 位单通道二进制矩阵；\n"
-           "* **阈值自动掩码**：基于当前图像灰度特征自动分离前景连通域；\n"
-           "* **局部作用域运算**：仅对掩码白色像素覆盖的 ROI 区域执行局部滤波、锐化、增强或缺陷高亮标注，避免背景干扰。";
+    return "### 📘 算子原理：交互式多几何复合掩码与局部作用 (Interactive Mask ROI)\n\n"
+           "**【核心思想】**\n"
+           "掩码（Mask）是工业视觉中控制计算作用域与隔离无关背景干扰的核心工具。本算子支持矩形、椭圆、圆环、正多边形及旋转矩形几何生成与局部图像滤波增强。\n\n"
+           "**【数学掩码布尔与加权模型】**\n"
+           "```\n"
+           "   - 区域提取 (掩码截取): dst(x, y) = I(x, y) · [ M(x, y) / 255 ]\n"
+           "   - 局部滤波合成:       dst(x, y) = I_proc(x, y) · M_norm + I_orig(x, y) · (1 - M_norm)\n"
+           "```\n\n"
+           "**【工程应用建议】**\n"
+           "- 屏蔽复杂工装夹具背景，限制后续算子仅在关键测量区域（ROI）内执行运算。";
 }
 
 void InteractiveMaskOp::SetRoiGeometry(int x, int y, int w, int h)

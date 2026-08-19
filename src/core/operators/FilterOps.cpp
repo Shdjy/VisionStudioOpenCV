@@ -30,9 +30,21 @@ GaussianBlurOp::GaussianBlurOp()
 std::string GaussianBlurOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：高斯滤波 (GaussianBlur)\n\n"
-           "高斯滤波是一种线性平滑滤波，其权重服从二维正态高斯分布：\n"
-           "$$G(x, y) = \\frac{1}{2\\pi\\sigma^2} e^{-\\frac{x^2+y^2}{2\\sigma^2}}$$\n"
-           "**特点**：越靠近核中心的像素权重越大，非常适合消除服从高斯分布的高频随机噪声。";
+           "**【核心思想】**\n"
+           "高斯滤波是一种线性平滑滤波，利用二维高斯正态分布权重对邻域像素进行加权平均。距离核中心越近的像素分配更高的权重，能有效滤除高斯随机白噪声并最大程度保留边缘轮廓。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "                    1               -(x² + y²) / (2·σ²)\n"
+           "   G(x, y)  =  ────────────  ·  e\n"
+           "                 2 · π · σ²\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **(x, y)**：相对于滤波核中心的邻域像素空间相对坐标偏移量；\n"
+           "- **σ (sigmaX)**：高斯核的标准差，控制分布曲线的平缓程度与模糊扩散半径；\n"
+           "- **KSize (2r + 1)**：滤波窗口核尺寸，必须为正奇数（如 3×3, 5×5）。\n\n"
+           "**【工程应用建议】**\n"
+           "- 噪声滤除：常作为 Canny 边缘检测、阈值分割或特征提取的前置预处理步骤；\n"
+           "- 模糊调优：增大核尺寸与 σ 会加剧平滑模糊程度，需在降噪与边缘清晰度之间权衡。";
 }
 
 bool GaussianBlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -99,9 +111,21 @@ BlurOp::BlurOp()
 std::string BlurOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：均值滤波 (blur / boxFilter)\n\n"
-           "每个像素点的输出为邻域窗口内所有像素的算术平均值：\n"
-           "$$K = \\frac{1}{ksize \\times ksize} \\begin{bmatrix} 1 & \\dots & 1 \\\\ \\vdots & \\ddots & \\vdots \\\\ 1 & \\dots & 1 \\end{bmatrix}$$\n"
-           "**特点**：运算速度快，但会造成边缘细节模糊。";
+           "**【核心思想】**\n"
+           "均值滤波是一种线性低通空间滤波技术，将目标像素替换为其矩形邻域窗口内所有像素灰度值的算术平均值。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "                 1          k/2     k/2\n"
+           "   dst(x, y) = ───────  ·   ∑       ∑     src(x + i, y + j)\n"
+           "                ksize²    i=-k/2  j=-k/2\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **src(x, y)**：原始输入图像在该坐标处的像素灰度值；\n"
+           "- **dst(x, y)**：滤波计算后输出图像的像素灰度值；\n"
+           "- **ksize**：滑动滤波窗口边长（如 3×3, 5×5）。\n\n"
+           "**【工程应用建议】**\n"
+           "- 适用：快速均匀消除微弱高频背景噪点，计算效率极高；\n"
+           "- 局限：对图像强边缘轮廓破坏较大，易造成物体轮廓发虚模糊。";
 }
 
 bool BlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -163,8 +187,18 @@ MedianBlurOp::MedianBlurOp()
 std::string MedianBlurOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：中值滤波 (medianBlur)\n\n"
-           "非线性滤波技术，取邻域所有像素灰度值排序后的中间值作为输出。\n"
-           "**特别擅长**：去除椒盐噪声 (Salt & Pepper Noise) 且有效保护边缘不被过度模糊。";
+           "**【核心思想】**\n"
+           "中值滤波是一种典型的非线性统计排序滤波技术，以邻域像素灰度值的统计中位数（Median）取代中心像素值，不依赖代数加权。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "   dst(x, y) = Median { src(x + i, y + j) | (i, j) ∈ Neighborhood(ksize) }\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **Median { ... }**：将滤波窗口内 ksize×ksize 个像素按灰度升序排序后取中间值；\n"
+           "- **ksize**：邻域孔径边长，必须为正奇数（如 3, 5, 7）。\n\n"
+           "**【工程应用建议】**\n"
+           "- 椒盐降噪王：工业视觉中消除传感器坏点、粉尘反光颗粒、脉冲式孤立噪点的首选；\n"
+           "- 边缘保护优：相比均值滤波，能在去噪的同时保持阶跃边缘不产生弥散模糊。";
 }
 
 bool MedianBlurOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -246,9 +280,23 @@ BilateralFilterOp::BilateralFilterOp()
 std::string BilateralFilterOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：双边滤波 (bilateralFilter)\n\n"
-           "双边滤波结合了**空间邻近度**和**像素值相似度**双重高斯核：\n"
-           "* 平坦区域进行平滑降噪；\n"
-           "* 边缘区域由于像素差值大，权重趋向于 0，因此能完美**保留边缘结构**（磨皮美颜算法核心基础）。";
+           "**【核心思想】**\n"
+           "双边滤波是一种结合了【空间几何邻近度】与【像素值灰度相似度】的双高斯非线性保边滤波，平坦区域充分平滑，边缘处权重衰减为 0 从而无损保留边界清晰度。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "                 1\n"
+           "   dst(p) = ─────────── · ∑  src(q) · G_space(||p - q||) · G_color(|src(p) - src(q)|)\n"
+           "             W_norm(p)   q∈Ω\n"
+           "\n"
+           "   其中: G_space(Δd) = exp(-Δd² / (2·σ_space²))\n"
+           "         G_color(ΔI) = exp(-ΔI² / (2·σ_color²))\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **d**：滤波过程中每个像素邻域的直径大小；\n"
+           "- **sigmaColor**：灰度相似度权重高斯核的标准差，值越大允许更大色差混合；\n"
+           "- **sigmaSpace**：空间几何距离权重高斯核的标准差，值越大影响范围越广。\n\n"
+           "**【工程应用建议】**\n"
+           "- 保边降噪首选：工件表面缺陷检测前置去噪、人脸磨皮等同时需要平滑背景与锁定边缘轮廓的场景。";
 }
 
 bool BilateralFilterOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -319,9 +367,25 @@ Filter2DOp::Filter2DOp()
 
 std::string Filter2DOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：自定义 2D 卷积滤波 (filter2D)\n\n"
-           "通过自定义 $3 \\times 3$ 卷积核与图像做二维互相关运算：\n"
-           "$$dst(x, y) = \\sum_{i} \\sum_{j} kernel(i, j) \\cdot src(x+i-anchor.x, y+j-anchor.y)$$";
+    return "### 📘 算子原理：自定义 2D 空间卷积滤波 (filter2D)\n\n"
+           "**【核心思想】**\n"
+           "通过预定义或自定义权重矩阵（卷积核 Kernel）与原始图像进行二维互相关/卷积运算，实现锐化、浮雕、高通滤波及边缘增强等定制化特征提取。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "                 k_h-1  k_w-1\n"
+           "   dst(x, y) =    ∑      ∑    kernel(i, j) · src(x + i - anchor.x, y + j - anchor.y)\n"
+           "                 i=0    j=0\n"
+           "```\n\n"
+           "**【常用典型核矩阵】**\n"
+           "```\n"
+           "   锐化核(Sharpen)         高通核(High-pass)         浮雕核(Emboss)\n"
+           "   ┌  0  -1   0 ┐          ┌ -1  -1  -1 ┐           ┌ -2  -1   0 ┐\n"
+           "   │ -1   5  -1 │          │ -1   8  -1 │           │ -1   1   1 │\n"
+           "   └  0  -1   0 ┘          └ -1  -1  -1 ┘           └  0   1   2 ┘\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **kernel(i, j)**：卷积核各点权重系数矩阵；\n"
+           "- **anchor**：卷积核锚点坐标，默认位于几何中心 (1, 1)。";
 }
 
 bool Filter2DOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)

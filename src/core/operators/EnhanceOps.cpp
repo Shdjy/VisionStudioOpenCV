@@ -41,11 +41,20 @@ BrightnessContrastOp::BrightnessContrastOp()
 std::string BrightnessContrastOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：亮度和对比度线性/非线性复合调节\n\n"
-           "复合点变换模型：\n"
-           "$$dst(x, y) = \\text{saturate\\_cast}\\langle uchar \\rangle \\left( \\alpha \\cdot src(x, y) + \\beta \\right)$$\n"
-           "* **$\\alpha$ 对比度倍数**：扩大或压缩灰度级动态跨度；\n"
-           "* **$\\beta$ 亮度加减**：全局向上提亮或向下压暗；\n"
-           "* **$\\gamma$ 伽马系数**：针对暗部/高光提供非线性幂律补偿。";
+           "**【核心思想】**\n"
+           "对图像执行一阶线性缩放与偏移变换，同时支持伽马非线性指数微调，快速改善图像曝光度不足或反差欠缺的问题。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "   1. 线性对比度与亮度调节:\n"
+           "        I_lin(x, y) = saturate( α · src(x, y) + β )\n"
+           "\n"
+           "   2. 伽马非线性映射 (若启用 γ ≠ 1.0):\n"
+           "        dst(x, y) = 255 · [ I_lin(x, y) / 255 ]^γ\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **alpha (α)**：对比度增益倍数（>1 放大反差，<1 降低对比）；\n"
+           "- **beta (β)**：亮度加减偏移量（>0 整体提亮，<0 压暗）；\n"
+           "- **gamma (γ)**：非线性幂律系数（<1 提亮阴影细节，>1 抑制强光过曝）。";
 }
 
 bool BrightnessContrastOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -155,9 +164,19 @@ EqualizeHistOp::EqualizeHistOp()
 std::string EqualizeHistOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：直方图均衡化 (equalizeHist)\n\n"
-           "通过累积分布函数 (CDF) 对灰度直方图进行积分变换，非线性拉伸图像动态范围。\n"
-           "* **HSV-V / YCrCb-Y 均衡化**：仅增强亮度分量，彻底避免色彩失真与色偏；\n"
-           "* **独立通道均衡化**：适用于严重偏色的工业环境下白平衡校正。";
+           "**【核心思想】**\n"
+           "利用图像灰度的累积分布函数（CDF）作为变换函数，将原图像原本集中在狭窄区间的灰度分布拉伸为全动态范围均匀分布，提升整体对比度。\n\n"
+           "**【数学模型 / 累积分布变换】**\n"
+           "```\n"
+           "                 (L - 1)      k\n"
+           "   s_k = T(r_k) = ─────── ·   ∑  n_j\n"
+           "                     N       j=0\n"
+           "\n"
+           "   其中: N 为像素总数, L=256 为最大灰度级数, n_j 为灰度值等于 j 的像素数\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **mode**：色彩空间均衡化策略（推荐 YCrCb-Y 或 HSV-V 模式，避免产生色偏）；\n"
+           "- **blend**：与原图混合比例，防止过度拉伸造成画面生硬。";
 }
 
 bool EqualizeHistOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -343,7 +362,18 @@ CLAHEOp::CLAHEOp()
 std::string CLAHEOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：限制对比度自适应直方图均衡化 (CLAHE)\n\n"
-           "将图像划分为互不重叠的小网格（Tiles），在局部计算直方图均衡并应用 **ClipLimit** 截断过高直方图峰值以防止局部背景噪声被过度放大，最后通过双线性插值消除块效应。";
+           "**【核心思想】**\n"
+           "传统全局均衡化容易将平坦区域的微弱噪声过度放大。CLAHE 将图像划分为独立的局部网格 (Tiles)，对每个网格的直方图高度设定截断阈值 (ClipLimit)，将超出部分均匀重新分配到所有灰度级，最后利用双线性插值消除块边界伪影。\n\n"
+           "**【计算流程】**\n"
+           "```\n"
+           "   1. 网格划分: 将全图拆分为 M×N 个大小为 tileGridSize 的小块\n"
+           "   2. 局部直方图截断:  h_clip(i) = min( h(i), ClipLimit )\n"
+           "   3. 溢出像素均匀再分配:  h_final(i) = h_clip(i) + ∑溢出值 / 256\n"
+           "   4. 局部 CDF 变换与双线性灰度插值平滑\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **clipLimit**：对比度增强上限（通常取 2.0~4.0，越大对比越强但噪点越多）；\n"
+           "- **tileGridSize**：分块网格尺寸（默认 8×8）。";
 }
 
 bool CLAHEOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -413,10 +443,15 @@ GammaCorrectionOp::GammaCorrectionOp()
 std::string GammaCorrectionOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：非线性伽马校正 (Gamma Correction)\n\n"
-           "非线性灰度变换模型：\n"
-           "$$dst(x, y) = 255 \\cdot \\left( \\frac{src(x, y)}{255} \\right)^\\gamma$$\n"
-           "* **$\\gamma < 1$**：暗部非线性拉伸扩展，提亮阴影细节；\n"
-           "* **$\\gamma > 1$**：压低暗部，保留高光反差。";
+           "**【核心思想】**\n"
+           "利用幂律响应曲线调整图像灰度动态范围，符合人眼对亮度的非线性对数感知特性。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "   dst(x, y) = 255 · [ src(x, y) / 255 ]^γ\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **γ < 1.0 (如 0.4~0.7)**：非线性拉伸暗区灰度级，大幅提亮背光阴影与暗部特征；\n"
+           "- **γ > 1.0 (如 1.5~2.5)**：非线性压缩暗部并增强高光区反差。";
 }
 
 bool GammaCorrectionOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -501,7 +536,12 @@ InvertOp::InvertOp()
 std::string InvertOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：图像颜色反相 (bitwise_not)\n\n"
-           "对图像中像素进行按位非运算（$dst = 255 - src$），生成底片反色效果，支持单通道独立反相与半透明混合。";
+           "**【核心思想】**\n"
+           "对像素灰度值执行取反运算，生成底片负片效果，使暗色目标转化为高亮前景，便于后续阈值提取。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "   dst(x, y) = 255 - src(x, y)    (即 ~src(x, y))\n"
+           "```";
 }
 
 bool InvertOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
@@ -615,8 +655,16 @@ SharpenOp::SharpenOp()
 std::string SharpenOp::GetPrincipleDoc() const
 {
     return "### 📘 算子原理：USM 反锐化掩膜 (Unsharp Masking)\n\n"
-           "基于原图减去高斯平滑模糊图得到高频细节掩膜，再按强度权重叠加回原图：\n"
-           "$$dst = src + strength \\cdot (src - GaussianBlur(src))$$";
+           "**【核心思想】**\n"
+           "从原图中减去平滑模糊图提取高频细节边缘（Unsharp Mask），再将高频分量按比例放大加回原图，增强细节清晰度与边缘反差。\n\n"
+           "**【数学模型 / 运算公式】**\n"
+           "```\n"
+           "   1. 提取高频掩模:  Mask(x, y) = src(x, y) - GaussianBlur(src(x, y))\n"
+           "   2. 增强叠加输出:  dst(x, y)  = src(x, y) + strength · Mask(x, y)\n"
+           "                               = (1 + strength)·src - strength·GaussianBlur(src)\n"
+           "```\n\n"
+           "**【符号与参数解析】**\n"
+           "- **strength**：高频分量增益系数（通常取 0.5~2.0）。";
 }
 
 bool SharpenOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
