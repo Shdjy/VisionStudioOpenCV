@@ -1,0 +1,298 @@
+<mxfile host="app.diagrams.net" agent="Antigravity">
+  <diagram id="VisionStudioOpenCV" name="VisionStudio OpenCV 全局架构类图">
+    <mxGraphModel dx="3602" dy="776" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="group_ui" parent="1" style="swimlane;startSize=28;fillColor=#1a2634;strokeColor=#2980b9;fontColor=#ffffff;fontStyle=1;fontSize=14;rounded=1;arcSize=4;collapsible=0;" value="UI Layer (Qt 界面层)" vertex="1">
+          <mxGeometry height="520" width="1340" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="class_MainWindow" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#2c3e50;strokeColor=#34495e;fontColor=#ffffff;" value="MainWindow&#xa;«QMainWindow»" vertex="1">
+          <mxGeometry height="445" width="280" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="mw_fields" parent="class_MainWindow" style="text;strokeColor=none;fillColor=#1e2b37;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontSize=11;" value="- _pipelineManager: PipelineManager&#xa;- _imageViewer: ImageViewer*&#xa;- _pipelineList: PipelineListWidget*&#xa;- _propertyPanel: PropertyPanel*&#xa;- _opTree: OperatorTreeWidget*&#xa;- _currentProjectFile: QString&#xa;- _rawOriginalMat: cv::Mat" vertex="1">
+          <mxGeometry height="120" width="280" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="mw_methods" parent="class_MainWindow" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontSize=11;" value="+ OnOpenImage()&#xa;+ OnSaveResult()&#xa;+ OnNewProject()&#xa;+ OnOpenProject()&#xa;+ OnSaveProject()&#xa;+ OnExportCppCode()&#xa;+ OnExportPythonCode()&#xa;+ OnBatchProcessClicked()&#xa;+ OnStepSelected(index: int)&#xa;+ OnPipelineExecuteCompleted()&#xa;+ SetupDockWidgets()&#xa;+ ConnectSignals()" vertex="1">
+          <mxGeometry height="289" width="280" y="156" as="geometry" />
+        </mxCell>
+        <mxCell id="class_PipelineListWidget" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#2c3e50;strokeColor=#34495e;fontColor=#ffffff;" value="PipelineListWidget&#xa;«QWidget»" vertex="1">
+          <mxGeometry height="255" width="230" x="330" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="plw_fields" parent="class_PipelineListWidget" style="text;strokeColor=none;fillColor=#1e2b37;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _pipelineMgr: PipelineManager*&#xa;- _isUpdatingList: bool&#xa;- ui: Ui::PipelineListWidget*" vertex="1">
+          <mxGeometry height="55" width="230" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="plw_methods" parent="class_PipelineListWidget" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SetPipelineManager(mgr)&#xa;+ RefreshList()&#xa;+ SelectStep(index: int)&#xa;+ OnMoveUpClicked()&#xa;+ OnMoveDownClicked()&#xa;+ OnRemoveClicked()&#xa;+ OnItemChanged(item)&#xa;«signals» StepSelected(int)" vertex="1">
+          <mxGeometry height="164" width="230" y="91" as="geometry" />
+        </mxCell>
+        <mxCell id="class_PropertyPanel" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#2c3e50;strokeColor=#34495e;fontColor=#ffffff;" value="PropertyPanel&#xa;«QWidget»" vertex="1">
+          <mxGeometry height="255" width="240" x="590" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="prop_fields" parent="class_PropertyPanel" style="text;strokeColor=none;fillColor=#1e2b37;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _pipelineMgr: PipelineManager*&#xa;- _currentStepIndex: int&#xa;- _executionDebounceTimer: QTimer*&#xa;- _previewOpNode: unique_ptr&lt;IOpNode&gt;" vertex="1">
+          <mxGeometry height="70" width="240" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="prop_methods" parent="class_PropertyPanel" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SetCurrentStep(stepIndex: int)&#xa;+ ShowOperatorPreview(opName)&#xa;+ BuildParamControls(opNode)&#xa;+ ScheduleExecution(stepIndex)&#xa;«signals» ParameterChanged(int)" vertex="1">
+          <mxGeometry height="149" width="240" y="106" as="geometry" />
+        </mxCell>
+        <mxCell id="class_ImageViewer" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#2c3e50;strokeColor=#34495e;fontColor=#ffffff;" value="ImageViewer&#xa;«QWidget»" vertex="1">
+          <mxGeometry height="255" width="230" x="860" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="iv_fields" parent="class_ImageViewer" style="text;strokeColor=none;fillColor=#1e2b37;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _originalScene: QGraphicsScene*&#xa;- _processedScene: QGraphicsScene*&#xa;- _viewMode: ViewMode&#xa;- _isSyncZoom: bool&#xa;- _measureTool: MeasureTool" vertex="1">
+          <mxGeometry height="85" width="230" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="iv_methods" parent="class_ImageViewer" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SetOriginalImage(img: cv::Mat)&#xa;+ SetProcessedImage(img: cv::Mat)&#xa;+ SetViewMode(mode: ViewMode)&#xa;+ ZoomFit()&#xa;+ OnLineProfileAnalysis()&#xa;+ OnColorPicker(pos: QPoint)" vertex="1">
+          <mxGeometry height="134" width="230" y="121" as="geometry" />
+        </mxCell>
+        <mxCell id="class_OperatorTreeWidget" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#2c3e50;strokeColor=#34495e;fontColor=#ffffff;" value="OperatorTreeWidget&#xa;«QWidget»" vertex="1">
+          <mxGeometry height="200" width="210" x="1110" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="ot_fields" parent="class_OperatorTreeWidget" style="text;strokeColor=none;fillColor=#1e2b37;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- ui: Ui::OperatorTreeWidget*&#xa;- _allOperators: vector&lt;OpDescriptor&gt;" vertex="1">
+          <mxGeometry height="40" width="210" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="ot_methods" parent="class_OperatorTreeWidget" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ PopulateOperatorTree()&#xa;+ FilterOperators(keyword)&#xa;«signals» OpDoubleClicked(name)&#xa;«signals» OpSelected(name)" vertex="1">
+          <mxGeometry height="124" width="210" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="class_CodeGenDialog" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#34495e;strokeColor=#4e6a85;fontColor=#ffffff;" value="CodeGenDialog&#xa;«QDialog»" vertex="1">
+          <mxGeometry height="150" width="230" x="330" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="cgd_methods" parent="class_CodeGenDialog" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SetPipelineManager(mgr)&#xa;+ GenerateCpp()&#xa;+ GeneratePython()&#xa;+ CopyToClipboard()&#xa;+ SaveToFile(path)" vertex="1">
+          <mxGeometry height="120" width="230" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="class_BatchProcessDialog" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#34495e;strokeColor=#4e6a85;fontColor=#ffffff;" value="BatchProcessDialog&#xa;«QDialog»" vertex="1">
+          <mxGeometry height="150" width="240" x="590" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="bpd_methods" parent="class_BatchProcessDialog" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SetPipelineManager(mgr)&#xa;+ StartBatchProcessing()&#xa;+ OnProgressUpdated(int, int)&#xa;+ CancelBatch()" vertex="1">
+          <mxGeometry height="120" width="240" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="class_MaskEditorDialog" parent="group_ui" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#34495e;strokeColor=#4e6a85;fontColor=#ffffff;" value="MaskEditorDialog&#xa;«QDialog»" vertex="1">
+          <mxGeometry height="150" width="230" x="860" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="med_methods" parent="class_MaskEditorDialog" style="text;strokeColor=none;fillColor=#2c3e50;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SetSourceImage(img: cv::Mat)&#xa;+ GetGeneratedMask(): cv::Mat&#xa;+ DrawBrush(pos: QPoint)&#xa;+ DrawPolygon(points)" vertex="1">
+          <mxGeometry height="120" width="230" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="group_bll" parent="1" style="swimlane;startSize=28;fillColor=#1b3a2a;strokeColor=#27ae60;fontColor=#ffffff;fontStyle=1;fontSize=14;rounded=1;arcSize=4;collapsible=0;" value="BLL Layer (业务逻辑与流水线调度层)" vertex="1">
+          <mxGeometry height="340" width="1340" x="40" y="600" as="geometry" />
+        </mxCell>
+        <mxCell id="class_PipelineManager" parent="group_bll" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#1e5138;strokeColor=#2ecc71;fontColor=#ffffff;" value="PipelineManager&#xa;«QObject»" vertex="1">
+          <mxGeometry height="270" width="360" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="pm_fields" parent="class_PipelineManager" style="text;strokeColor=none;fillColor=#143827;fontColor=#a9dfbf;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _sourceImage: cv::Mat&#xa;- _steps: vector&lt;unique_ptr&lt;PipelineStep&gt;&gt;&#xa;- _totalTimeMs: double" vertex="1">
+          <mxGeometry height="55" width="360" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="pm_methods" parent="class_PipelineManager" style="text;strokeColor=none;fillColor=#1e5138;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SetSourceImage(img: cv::Mat)&#xa;+ AddStep(opNode: unique_ptr&lt;IOpNode&gt;): int&#xa;+ InsertStep(index: int, opNode): bool&#xa;+ RemoveStep(index: int): bool&#xa;+ MoveStepUp(index: int): bool&#xa;+ MoveStepDown(index: int): bool&#xa;+ SetAllStepsEnabled(enabled: bool)&#xa;+ MarkDirtyFrom(index: int)&#xa;+ Execute(forceAll: bool = false): bool&#xa;+ GetFinalOutput(): const cv::Mat&amp;&#xa;+ GetStepOutput(index: int): const cv::Mat&amp;&#xa;«signals» PipelineChanged(), StepExecuted(), ExecutionCompleted()" vertex="1">
+          <mxGeometry height="179" width="360" y="91" as="geometry" />
+        </mxCell>
+        <mxCell id="class_PipelineStep" parent="group_bll" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#1e5138;strokeColor=#2ecc71;fontColor=#ffffff;" value="PipelineStep&#xa;(步骤节点包装器)" vertex="1">
+          <mxGeometry height="270" width="280" x="460" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="ps_fields" parent="class_PipelineStep" style="text;strokeColor=none;fillColor=#143827;fontColor=#a9dfbf;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _opNode: unique_ptr&lt;IOpNode&gt;&#xa;- _enabled: bool&#xa;- _isDirty: bool&#xa;- _outputCache: cv::Mat&#xa;- _executionTimeMs: double&#xa;- _errorMessage: string" vertex="1">
+          <mxGeometry height="100" width="280" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="ps_methods" parent="class_PipelineStep" style="text;strokeColor=none;fillColor=#1e5138;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ GetOpNode(): IOpNode*&#xa;+ IsEnabled(): bool&#xa;+ SetEnabled(enabled: bool)&#xa;+ IsDirty(): bool&#xa;+ MarkDirty() / ClearDirty()&#xa;+ GetOutputCache(): const cv::Mat&amp;&#xa;+ SetOutputCache(mat: cv::Mat)&#xa;+ GetExecutionTimeMs(): double&#xa;+ GetErrorMessage(): string" vertex="1">
+          <mxGeometry height="134" width="280" y="136" as="geometry" />
+        </mxCell>
+        <mxCell id="class_ProjectManager" parent="group_bll" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#1e5138;strokeColor=#2ecc71;fontColor=#ffffff;" value="ProjectManager&#xa;«BLL Service»" vertex="1">
+          <mxGeometry height="200" width="320" x="830" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="prm_fields" parent="class_ProjectManager" style="text;strokeColor=none;fillColor=#143827;fontColor=#a9dfbf;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ static constexpr const char* ProjectVersion = &quot;1.0&quot;" vertex="1">
+          <mxGeometry height="30" width="320" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="prm_methods" parent="class_ProjectManager" style="text;strokeColor=none;fillColor=#1e5138;fontColor=#ecf0f1;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ SaveProject(pipeline, filePath, errorMsg): bool&#xa;+ LoadProject(pipeline, filePath, errorMsg): bool&#xa;- SerializePipeline(pipeline): QJsonObject&#xa;- DeserializePipeline(jsonObj, pipeline): bool&#xa;- ApplyJsonParameter(op, param, jsonVal): bool" vertex="1">
+          <mxGeometry height="134" width="320" y="66" as="geometry" />
+        </mxCell>
+        <mxCell id="group_codegen" parent="1" style="swimlane;startSize=28;fillColor=#3e2723;strokeColor=#d35400;fontColor=#ffffff;fontStyle=1;fontSize=14;rounded=1;arcSize=4;collapsible=0;" value="CodeGen &amp; Utilities (代码生成与通用工具模块)" vertex="1">
+          <mxGeometry height="520" width="940" x="1420" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="class_ICodeGenerator" parent="group_codegen" style="swimlane;fontStyle=3;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#5d4037;strokeColor=#e67e22;fontColor=#ffffff;" value="«interface»&#xa;ICodeGenerator" vertex="1">
+          <mxGeometry height="130" width="280" x="30" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="icg_methods" parent="class_ICodeGenerator" style="text;strokeColor=none;fillColor=#4e342e;fontColor=#f5cba7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ ~ICodeGenerator() = default&#xa;+ Generate(steps: const vector&lt;unique_ptr&lt;PipelineStep&gt;&gt;&amp;): string = 0&#xa;+ GetLanguageName(): string = 0&#xa;+ GetFileExtension(): string = 0" vertex="1">
+          <mxGeometry height="94" width="280" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_CppCodeGenerator" parent="group_codegen" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#5d4037;strokeColor=#e67e22;fontColor=#ffffff;" value="CppCodeGenerator&#xa;(实现 C++ OpenCV 代码导出)" vertex="1">
+          <mxGeometry height="100" width="240" x="30" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="cpp_methods" parent="class_CppCodeGenerator" style="text;strokeColor=none;fillColor=#4e342e;fontColor=#f5cba7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ Generate(steps): string override&#xa;+ GetLanguageName(): string override&#xa;+ GetFileExtension(): string override" vertex="1">
+          <mxGeometry height="64" width="240" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_PythonCodeGenerator" parent="group_codegen" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#5d4037;strokeColor=#e67e22;fontColor=#ffffff;" value="PythonCodeGenerator&#xa;(实现 Python OpenCV 代码导出)" vertex="1">
+          <mxGeometry height="100" width="240" x="300" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="py_methods" parent="class_PythonCodeGenerator" style="text;strokeColor=none;fillColor=#4e342e;fontColor=#f5cba7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ Generate(steps): string override&#xa;+ GetLanguageName(): string override&#xa;+ GetFileExtension(): string override" vertex="1">
+          <mxGeometry height="64" width="240" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_Logger" parent="group_codegen" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#424242;strokeColor=#7f8c8d;fontColor=#ffffff;" value="Logger&#xa;«Static Utility»" vertex="1">
+          <mxGeometry height="130" width="320" x="580" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="log_methods" parent="class_Logger" style="text;strokeColor=none;fillColor=#303030;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ static Info(module: string, msg: string)&#xa;+ static Warn(module: string, msg: string)&#xa;+ static Error(module: string, msg: string)&#xa;+ static SetLogCallback(callback)" vertex="1">
+          <mxGeometry height="100" width="320" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="class_IconUtils" parent="group_codegen" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#424242;strokeColor=#7f8c8d;fontColor=#ffffff;" value="IconUtils&#xa;«Static Utility»" vertex="1">
+          <mxGeometry height="130" width="320" x="580" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="iu_methods" parent="class_IconUtils" style="text;strokeColor=none;fillColor=#303030;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ static CreateRedCrossIcon(size: int): QIcon&#xa;+ static CreateSelectAllIcon(color, size): QIcon&#xa;+ static CreateDeselectAllIcon(color, size): QIcon&#xa;+ static CreateCategoryIcon(cat): QIcon" vertex="1">
+          <mxGeometry height="100" width="320" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="class_AppSettings" parent="group_codegen" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#424242;strokeColor=#7f8c8d;fontColor=#ffffff;" value="AppSettings&#xa;«Config Utility»" vertex="1">
+          <mxGeometry height="130" width="320" x="580" y="350" as="geometry" />
+        </mxCell>
+        <mxCell id="as_methods" parent="class_AppSettings" style="text;strokeColor=none;fillColor=#303030;fontColor=#bdc3c7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ static GetLastDirectory(key: string): QString&#xa;+ static SetLastDirectory(key: string, path: QString)&#xa;+ static GetRecentProjects(): QStringList&#xa;+ static AddRecentProject(path: QString)" vertex="1">
+          <mxGeometry height="100" width="320" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="group_core" parent="1" style="swimlane;startSize=28;fillColor=#311b92;strokeColor=#8e44ad;fontColor=#ffffff;fontStyle=1;fontSize=14;rounded=1;arcSize=4;collapsible=0;" value="Core Layer (核心算子基类、元数据、工厂与算法库)" vertex="1">
+          <mxGeometry height="780" width="2320" x="40" y="980" as="geometry" />
+        </mxCell>
+        <mxCell id="class_IOpNode" parent="group_core" style="swimlane;fontStyle=3;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#4a148c;strokeColor=#9b59b6;fontColor=#ffffff;" value="«abstract interface»&#xa;IOpNode(算子抽象基类)" vertex="1">
+          <mxGeometry height="340" width="380" x="460" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="iop_fields" parent="class_IOpNode" style="text;strokeColor=none;fillColor=#38006b;fontColor=#e1bee7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _results: vector&lt;OpResultItem&gt;" vertex="1">
+          <mxGeometry height="25" width="380" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="iop_methods" parent="class_IOpNode" style="text;strokeColor=none;fillColor=#4a148c;fontColor=#f3e5f5;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ virtual ~IOpNode() = default&#xa;+ virtual GetCategory(): OpCategory = 0&#xa;+ virtual GetName(): string = 0&#xa;+ virtual GetDisplayName(): string = 0&#xa;+ virtual GetDescription(): string = 0&#xa;+ virtual GetPrincipleDoc(): string = 0&#xa;+ virtual Process(input: const Mat&amp;, output: Mat&amp;, errorMsg: string&amp;): bool = 0&#xa;+ virtual GetParameters(): vector&lt;OpParameter&gt;&amp; = 0&#xa;+ virtual SetParameter(name: string, value: variant): bool&#xa;+ virtual FindParameter(name: string): OpParameter*&#xa;+ virtual GenerateCppCode(inVar: string, outVar: string): string = 0&#xa;+ virtual GeneratePythonCode(inVar: string, outVar: string): string = 0&#xa;+ virtual Clone(): unique_ptr&lt;IOpNode&gt; = 0&#xa;+ GetResults(): const vector&lt;OpResultItem&gt;&amp;&#xa;# AddResult(name, displayName, value, unit)&#xa;# ClearResults()" vertex="1">
+          <mxGeometry height="275" width="380" y="65" as="geometry" />
+        </mxCell>
+        <mxCell id="struct_OpParameter" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#4a148c;strokeColor=#9b59b6;fontColor=#ffffff;" value="«struct»&#xa;OpParameter(参数元数据)" vertex="1">
+          <mxGeometry height="220" width="280" x="900" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="opp_fields" parent="struct_OpParameter" style="text;strokeColor=none;fillColor=#38006b;fontColor=#e1bee7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ Name: string&#xa;+ DisplayName: string&#xa;+ Tooltip: string&#xa;+ Type: ParamType&#xa;+ Value: variant&lt;int, double, bool, string&gt;&#xa;+ MinValue: variant&lt;int, double&gt;&#xa;+ MaxValue: variant&lt;int, double&gt;&#xa;+ Step: variant&lt;int, double&gt;&#xa;+ EnumOptions: vector&lt;string&gt;&#xa;+ GetInt(): int&#xa;+ GetDouble(): double&#xa;+ GetBool(): bool&#xa;+ GetString(): string" vertex="1">
+          <mxGeometry height="184" width="280" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_OpRegistry" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#4a148c;strokeColor=#9b59b6;fontColor=#ffffff;" value="OpRegistry&#xa;«Singleton Factory»" vertex="1">
+          <mxGeometry height="230" width="380" x="30" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="or_fields" parent="class_OpRegistry" style="text;strokeColor=none;fillColor=#38006b;fontColor=#e1bee7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _registry: unordered_map&lt;string, CreatorFunc&gt;&#xa;- _descriptors: vector&lt;OpDescriptor&gt;&#xa;- static Instance(): OpRegistry&amp;" vertex="1">
+          <mxGeometry height="55" width="380" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="or_methods" parent="class_OpRegistry" style="text;strokeColor=none;fillColor=#4a148c;fontColor=#f3e5f5;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ Register&lt;T&gt;()&#xa;+ Create(name: string): unique_ptr&lt;IOpNode&gt;&#xa;+ GetAllDescriptors(): const vector&lt;OpDescriptor&gt;&amp;&#xa;+ GetByCategory(cat: OpCategory): vector&lt;OpDescriptor&gt;&#xa;+ RegisterAllBuiltinOperators()" vertex="1">
+          <mxGeometry height="139" width="380" y="91" as="geometry" />
+        </mxCell>
+        <mxCell id="class_PipelineContext" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#4a148c;strokeColor=#9b59b6;fontColor=#ffffff;" value="PipelineContext&#xa;«Singleton Context»" vertex="1">
+          <mxGeometry height="200" width="280" x="1220" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="pc_fields" parent="class_PipelineContext" style="text;strokeColor=none;fillColor=#38006b;fontColor=#e1bee7;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _sourceImage: cv::Mat&#xa;- _stepOutputs: vector&lt;cv::Mat&gt;&#xa;- _mutex: std::mutex" vertex="1">
+          <mxGeometry height="55" width="280" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="pc_methods" parent="class_PipelineContext" style="text;strokeColor=none;fillColor=#4a148c;fontColor=#f3e5f5;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="+ static Instance(): PipelineContext&amp;&#xa;+ SetSourceImage(src: cv::Mat)&#xa;+ GetSourceImage(): cv::Mat&#xa;+ SetStepOutput(idx: int, outMat: cv::Mat)&#xa;+ GetStepOutput(idx: int): cv::Mat&#xa;+ Clear()" vertex="1">
+          <mxGeometry height="109" width="280" y="91" as="geometry" />
+        </mxCell>
+        <mxCell id="class_FilterOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="FilterOps 滤波类算子&#xa;(GaussianBlurOp / BlurOp / MedianBlurOp / BilateralFilterOp / Filter2DOp)" vertex="1">
+          <mxGeometry height="150" width="330" x="30" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="fo_methods" parent="class_FilterOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="330" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_ColorOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="ColorOps 色彩空间算子&#xa;(Bgr2GrayOp / Bgr2HsvOp / Bgr2RgbOp / ColorInvertOp / ChannelSplitMergeOp)" vertex="1">
+          <mxGeometry height="150" width="330" x="390" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="co_methods" parent="class_ColorOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="330" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_EdgeOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="EdgeOps 边缘检测算子&#xa;(CannyEdgeOp / SobelOp / LaplacianOp / ScharrOp)" vertex="1">
+          <mxGeometry height="150" width="330" x="750" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="eo_methods" parent="class_EdgeOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="330" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_ThresholdOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="ThresholdOps 阈值分割算子&#xa;(BinaryThresholdOp / OtsuThresholdOp / AdaptiveThresholdOp / InRangeThresholdOp)" vertex="1">
+          <mxGeometry height="150" width="350" x="1110" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="to_methods" parent="class_ThresholdOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="350" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_MorphOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="MorphologyOps 形态学算子&#xa;(ErodeOp / DilateOp / MorphOpenOp / MorphCloseOp / MorphGradientOp / TopHat / BlackHat)" vertex="1">
+          <mxGeometry height="150" width="380" x="1490" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="mo_methods" parent="class_MorphOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="380" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_ContourOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="ContourOps 轮廓与几何测量&#xa;(FindDrawContoursOp / BoundingBoxOp / MinAreaRectOp / ConvexHullOp / ContourFilterOp)" vertex="1">
+          <mxGeometry height="150" width="330" x="30" y="605" as="geometry" />
+        </mxCell>
+        <mxCell id="cto_methods" parent="class_ContourOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="330" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_FeatureOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="FeatureOps 特征与模板匹配&#xa;(HarrisCornerOp / FastCornerOp / OrbFeatureOp / TemplateMatchOp)" vertex="1">
+          <mxGeometry height="150" width="330" x="390" y="605" as="geometry" />
+        </mxCell>
+        <mxCell id="fe_methods" parent="class_FeatureOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="330" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_GeometricOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="GeometricOps 几何变换算子&#xa;(ResizeOp / RotateOp / FlipOp / AffineOp / PerspectiveOp)" vertex="1">
+          <mxGeometry height="150" width="330" x="750" y="605" as="geometry" />
+        </mxCell>
+        <mxCell id="geo_methods" parent="class_GeometricOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="330" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_EnhanceOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="EnhanceOps 图像增强算子&#xa;(EqualizeHistOp / ClaheOp / BrightnessContrastOp / GammaCorrectionOp / LutCurveOp)" vertex="1">
+          <mxGeometry height="150" width="350" x="1110" y="605" as="geometry" />
+        </mxCell>
+        <mxCell id="enh_methods" parent="class_EnhanceOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="350" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="class_AdvancedOps" parent="group_core" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=36;horizontalStack=0;resizeParent=1;collapsible=0;fillColor=#283593;strokeColor=#3f51b5;fontColor=#ffffff;" value="AdvancedOps 高级与算法实战&#xa;(HoughLinesOp / HoughCirclesOp / WatershedOp / GrabCutOp / QrCodeDetectOp)" vertex="1">
+          <mxGeometry height="150" width="380" x="1490" y="605" as="geometry" />
+        </mxCell>
+        <mxCell id="adv_methods" parent="class_AdvancedOps" style="text;strokeColor=none;fillColor=#1a237e;fontColor=#c5cae9;align=left;verticalAlign=top;spacingLeft=6;spacingRight=6;overflow=hidden;whiteSpace=wrap;html=1;fontSize=11;" value="- _params: vector&lt;OpParameter&gt;&#xa;+ Process(input, output, errorMsg): bool override&#xa;+ GenerateCppCode(inVar, outVar): string override&#xa;+ GeneratePythonCode(inVar, outVar): string override&#xa;+ Clone(): unique_ptr&lt;IOpNode&gt; override" vertex="1">
+          <mxGeometry height="114" width="380" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_mw_pm" edge="1" parent="1" source="class_MainWindow" style="endArrow=diamondThin;endFill=1;endSize=14;html=1;strokeColor=#3498db;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.25;entryY=0;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_PipelineManager" value="持有/驱动">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_mw_plw" edge="1" parent="1" source="class_MainWindow" style="endArrow=diamondThin;endFill=1;endSize=12;html=1;strokeColor=#2980b9;strokeWidth=1.5;exitX=1;exitY=0.2;entryX=0;entryY=0.2;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_PipelineListWidget" value="管理">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_mw_pp" edge="1" parent="1" source="class_MainWindow" style="endArrow=diamondThin;endFill=1;endSize=12;html=1;strokeColor=#2980b9;strokeWidth=1.5;exitX=1;exitY=0.35;entryX=0;entryY=0.35;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_PropertyPanel" value="管理">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_mw_iv" edge="1" parent="1" source="class_MainWindow" style="endArrow=diamondThin;endFill=1;endSize=12;html=1;strokeColor=#2980b9;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_ImageViewer" value="管理">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_plw_pm" edge="1" parent="1" source="class_PipelineListWidget" style="endArrow=open;endSize=10;dashed=1;html=1;strokeColor=#27ae60;strokeWidth=1.5;exitX=0.5;exitY=1;entryX=0.6;entryY=0;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_PipelineManager" value="依赖/控制">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_pp_pm" edge="1" parent="1" source="class_PropertyPanel" style="endArrow=open;endSize=10;dashed=1;html=1;strokeColor=#27ae60;strokeWidth=1.5;exitX=0.5;exitY=1;entryX=0.8;entryY=0;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_PipelineManager" value="参数调度执行">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_pm_ps" edge="1" parent="1" source="class_PipelineManager" style="endArrow=diamondThin;endFill=1;endSize=14;html=1;strokeColor=#2ecc71;strokeWidth=2;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_PipelineStep" value="1..* 组合包含步骤">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_ps_iop" edge="1" parent="1" source="class_PipelineStep" style="endArrow=diamondThin;endFill=1;endSize=14;html=1;strokeColor=#9b59b6;strokeWidth=2;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_IOpNode" value="持有 unique_ptr&lt;IOpNode&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_prm_pm" edge="1" parent="1" source="class_ProjectManager" style="endArrow=open;endSize=10;dashed=1;html=1;strokeColor=#2ecc71;strokeWidth=1.5;exitX=0;exitY=0.5;entryX=1;entryY=0.2;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_PipelineManager" value="序列化/反序列化">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_prm_or" edge="1" parent="1" source="class_ProjectManager" style="endArrow=open;endSize=10;dashed=1;html=1;strokeColor=#9b59b6;strokeWidth=1.5;exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_OpRegistry" value="创建算子">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_or_iop" edge="1" parent="1" source="class_OpRegistry" style="endArrow=open;endSize=10;dashed=1;html=1;strokeColor=#9b59b6;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_IOpNode" value="反射/工厂构建">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_iop_opp" edge="1" parent="1" source="class_IOpNode" style="endArrow=diamondThin;endFill=0;endSize=12;html=1;strokeColor=#9b59b6;strokeWidth=1.5;exitX=1;exitY=0.3;entryX=0;entryY=0.3;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="struct_OpParameter" value="参数元数据集合">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_fo_iop" edge="1" parent="1" source="class_FilterOps" style="endArrow=block;dashed=1;endSize=14;endFill=0;html=1;strokeColor=#8e44ad;strokeWidth=1.5;exitX=0.5;exitY=0;entryX=0.2;entryY=1;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_IOpNode" value="继承实现">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_co_iop" edge="1" parent="1" source="class_ColorOps" style="endArrow=block;dashed=1;endSize=14;endFill=0;html=1;strokeColor=#8e44ad;strokeWidth=1.5;exitX=0.5;exitY=0;entryX=0.4;entryY=1;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_IOpNode" value="继承实现">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_eo_iop" edge="1" parent="1" source="class_EdgeOps" style="endArrow=block;dashed=1;endSize=14;endFill=0;html=1;strokeColor=#8e44ad;strokeWidth=1.5;exitX=0.5;exitY=0;entryX=0.6;entryY=1;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_IOpNode" value="继承实现">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_to_iop" edge="1" parent="1" source="class_ThresholdOps" style="endArrow=block;dashed=1;endSize=14;endFill=0;html=1;strokeColor=#8e44ad;strokeWidth=1.5;exitX=0.5;exitY=0;entryX=0.8;entryY=1;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_IOpNode" value="继承实现">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_cpp_icg" edge="1" parent="1" source="class_CppCodeGenerator" style="endArrow=block;dashed=1;endSize=12;endFill=0;html=1;strokeColor=#d35400;strokeWidth=1.5;exitX=0.5;exitY=0;entryX=0.3;entryY=1;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_ICodeGenerator" value="实现">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_py_icg" edge="1" parent="1" source="class_PythonCodeGenerator" style="endArrow=block;dashed=1;endSize=12;endFill=0;html=1;strokeColor=#d35400;strokeWidth=1.5;exitX=0.5;exitY=0;entryX=0.7;entryY=1;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_ICodeGenerator" value="实现">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_cgd_icg" edge="1" parent="1" source="class_CodeGenDialog" style="endArrow=open;endSize=10;dashed=1;html=1;strokeColor=#e67e22;strokeWidth=1.5;exitX=1;exitY=0.5;entryX=0;entryY=0.5;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="class_ICodeGenerator" value="调用生成">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
