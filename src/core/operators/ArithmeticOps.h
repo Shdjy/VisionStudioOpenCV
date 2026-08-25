@@ -3,7 +3,7 @@
 #include "../IOpNode.h"
 
 /**
- * @brief 双图与原图算术逻辑运算算子 (AddWeighted, AbsDiff, Bitwise AND/OR/XOR, Add, Subtract)
+ * @brief 双图与分支算术复合运算算子 (加权融合, 绝对值差分, 按位逻辑, 代数加减乘除)
  */
 class BlendWithSourceOp : public IOpNode
 {
@@ -13,8 +13,8 @@ public:
 
     OpCategory GetCategory() const override { return OpCategory::MaskAndArithmetic; }
     std::string GetName() const override { return "BlendWithSource"; }
-    std::string GetDisplayName() const override { return "双图与原图算术复合运算 (Image Arithmetic & Blending)"; }
-    std::string GetDescription() const override { return "支持当前图与原始输入图或前置步骤进行加权融合、绝对值差分(缺陷检测)、按位与/或/异或掩码及饱和加减运算。"; }
+    std::string GetDisplayName() const override { return "双图与分支复合运算 (Branch Merge & Blend)"; }
+    std::string GetDescription() const override { return "将当前流程的图像与指定分支（主流水线/分支1~4/原图/纯色底板）的结果进行加权融合、差分缺陷检测、按位逻辑或代数运算。"; }
     std::string GetPrincipleDoc() const override;
 
     bool Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg) override;
@@ -30,7 +30,7 @@ private:
 };
 
 /**
- * @brief 掩码抠图与原图ROI提取算子 (Mask Apply ROI)
+ * @brief 掩码抠图与ROI提取算子 (Mask Apply ROI)
  */
 class MaskApplyOp : public IOpNode
 {
@@ -40,8 +40,8 @@ public:
 
     OpCategory GetCategory() const override { return OpCategory::MaskAndArithmetic; }
     std::string GetName() const override { return "MaskApply"; }
-    std::string GetDisplayName() const override { return "掩码抠图与原图ROI提取 (Mask Apply ROI)"; }
-    std::string GetDescription() const override { return "将当前二值化或分割结果作为掩码(Mask)，作用回原始图像，仅提取目标区域并支持自定义背景填充。"; }
+    std::string GetDisplayName() const override { return "掩码抠图与ROI提取 (Mask Apply ROI)"; }
+    std::string GetDescription() const override { return "将当前二值分割掩码作用到目标图像（原图/主流水线/指定分支），高保真提取目标区域并支持背景填充。"; }
     std::string GetPrincipleDoc() const override;
 
     bool Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg) override;

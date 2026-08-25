@@ -2,40 +2,143 @@
 #include "../PipelineContext.h"
 #include <sstream>
 
+namespace
+{
+// 辅助函数：根据分支选项获取第二操作数图像
+cv::Mat ResolveBranchImage(int secSourceCode, const cv::Mat& currentInput, const cv::Size& targetSize, int targetChannels)
+{
+    cv::Mat result;
+    if (secSourceCode == 0) // 主流水线最终输出
+    {
+        result = PipelineContext::Instance().GetBranch("主流水线");
+        if (result.empty()) result = PipelineContext::Instance().GetBranch("Main");
+        if (result.empty()) result = PipelineContext::Instance().GetSourceImage();
+    }
+    else if (secSourceCode >= 1 && secSourceCode <= 4) // 分支 1 ~ 4
+    {
+        std::string bName = "分支 " + std::to_string(secSourceCode);
+        result = PipelineContext::Instance().GetBranch(bName);
+        if (result.empty())
+        {
+            result = PipelineContext::Instance().GetBranch("Branch " + std::to_string(secSourceCode));
+        }
+        if (result.empty())
+        {
+            result = currentInput.clone();
+        }
+    }
+    else if (secSourceCode == 5) // 原始输入图像
+    {
+        result = PipelineContext::Instance().GetSourceImage();
+        if (result.empty()) result = currentInput.clone();
+    }
+    else if (secSourceCode == 6) // 纯白底板
+    {
+        cv::Size sz = (targetSize.width > 0 && targetSize.height > 0) ? targetSize : (currentInput.empty() ? cv::Size(640, 480) : currentInput.size());
+        int ch = (targetChannels > 0) ? targetChannels : (currentInput.empty() ? 3 : currentInput.channels());
+        result = cv::Mat(sz, ch == 1 ? CV_8UC1 : CV_8UC3, cv::Scalar::all(255));
+    }
+    else if (secSourceCode == 7) // 纯黑底板
+    {
+        cv::Size sz = (targetSize.width > 0 && targetSize.height > 0) ? targetSize : (currentInput.empty() ? cv::Size(640, 480) : currentInput.size());
+        int ch = (targetChannels > 0) ? targetChannels : (currentInput.empty() ? 3 : currentInput.channels());
+        result = cv::Mat(sz, ch == 1 ? CV_8UC1 : CV_8UC3, cv::Scalar::all(0));
+    }
+    else
+    {
+        result = currentInput.clone();
+    }
+
+    if (result.empty())
+    {
+        result = currentInput.clone();
+    }
+
+    // 几何尺寸对齐
+    if (targetSize.width > 0 && targetSize.height > 0 && result.size() != targetSize)
+    {
+        cv::resize(result, result, targetSize);
+    }
+
+    // 通道数对齐
+    if (targetChannels > 0 && result.channels() != targetChannels)
+    {
+        if (targetChannels == 3 && result.channels() == 1)
+        {
+            cv::cvtColor(result, result, cv::COLOR_GRAY2BGR);
+        }
+        else if (targetChannels == 1 && result.channels() == 3)
+        {
+            cv::cvtColor(result, result, cv::COLOR_BGR2GRAY);
+        }
+    }
+
+    return result;
+}
+
+std::string GetBranchCppExpr(int secSourceCode, const std::string& inVar)
+{
+    if (secSourceCode == 0) return "main_pipeline_out";
+    if (secSourceCode >= 1 && secSourceCode <= 4) return "branch_" + std::to_string(secSourceCode) + "_out";
+    if (secSourceCode == 5) return "source_image";
+    if (secSourceCode == 6) return "cv::Mat(" + inVar + ".size(), " + inVar + ".type(), cv::Scalar::all(255))";
+    if (secSourceCode == 7) return "cv::Mat::zeros(" + inVar + ".size(), " + inVar + ".type())";
+    return inVar;
+}
+
+std::string GetBranchPythonExpr(int secSourceCode, const std::string& inVar)
+{
+    if (secSourceCode == 0) return "main_pipeline_out";
+    if (secSourceCode >= 1 && secSourceCode <= 4) return "branch_" + std::to_string(secSourceCode) + "_out";
+    if (secSourceCode == 5) return "source_image";
+    if (secSourceCode == 6) return "np.full_like(" + inVar + ", 255)";
+    if (secSourceCode == 7) return "np.zeros_like(" + inVar + ")";
+    return inVar;
+}
+}
+
 // ============================================================================
-// 1. BlendWithSourceOp (双图与原图算术逻辑复合运算)
+// 1. BlendWithSourceOp (双图与分支复合运算)
 // ============================================================================
 BlendWithSourceOp::BlendWithSourceOp()
 {
-    // 0. 第二操作数来源
-    OpParameter srcParam;
-    srcParam.Name = "secondSource";
-    srcParam.DisplayName = "第二操作数图像源 (Second Image Source)";
-    srcParam.Type = ParamType::ComboBox;
-    srcParam.Value = 0; // 原始输入图像
-    srcParam.EnumOptions = {
+    // 0. 第二操作数来源 (分支合并目标)
+    OpParameter secSrcParam;
+    secSrcParam.Name = "secondSource";
+    secSrcParam.DisplayName = "合并目标分支/图像源 (Merge Target Branch)";
+    secSrcParam.Type = ParamType::ComboBox;
+    secSrcParam.Value = 0; // 主流水线
+    secSrcParam.EnumOptions = {
+        "主流水线最终输出 (Main Pipeline Output)",
+        "分支 1 最终输出 (Branch 1 Output)",
+        "分支 2 最终输出 (Branch 2 Output)",
+        "分支 3 最终输出 (Branch 3 Output)",
+        "分支 4 最终输出 (Branch 4 Output)",
         "原始输入图像 (Original Source Image)",
         "纯白色底板 (Solid White Canvas)",
         "纯黑色底板 (Solid Black Canvas)"
     };
-    _params.push_back(srcParam);
+    secSrcParam.Tooltip = "选择与当前流程进行合并/复合运算的目标分支或图像源";
+    _params.push_back(secSrcParam);
 
     // 1. 运算模式
     OpParameter modeParam;
     modeParam.Name = "opMode";
-    modeParam.DisplayName = "运算模式 (Operation Mode)";
+    modeParam.DisplayName = "复合运算模式 (Operation Mode)";
     modeParam.Type = ParamType::ComboBox;
     modeParam.Value = 0; // 加权融合
     modeParam.EnumOptions = {
-        "线性加权融合 (AddWeighted: α·A + β·B + γ)",
-        "绝对值差分 (AbsDiff: |A - B| / 缺陷检测)",
+        "线性加权融合 (AddWeighted: α·当前 + β·目标 + γ)",
+        "绝对值差分 (AbsDiff: |当前 - 目标| / 缺陷比对)",
         "按位与掩码相交 (Bitwise AND)",
         "按位或特征叠加 (Bitwise OR)",
         "按位异或边缘差异 (Bitwise XOR)",
         "饱和加法叠加 (cv::add)",
-        "饱和减法剔除 (cv::subtract: A - B)",
+        "饱和减法剔除 (cv::subtract: 当前 - 目标)",
         "取亮最大值融合 (cv::max)",
-        "取暗最小值融合 (cv::min)"
+        "取暗最小值融合 (cv::min)",
+        "逐像素点乘缩放 (cv::multiply / 255)",
+        "逐像素点除校正 (cv::divide * 255)"
     };
     _params.push_back(modeParam);
 
@@ -53,7 +156,7 @@ BlendWithSourceOp::BlendWithSourceOp()
     // 3. Beta
     OpParameter betaParam;
     betaParam.Name = "beta";
-    betaParam.DisplayName = "第二图权重 (Beta β)";
+    betaParam.DisplayName = "目标图权重 (Beta β)";
     betaParam.Type = ParamType::DoubleSlider;
     betaParam.Value = 0.5;
     betaParam.MinValue = 0.0;
@@ -75,33 +178,38 @@ BlendWithSourceOp::BlendWithSourceOp()
 
 std::string BlendWithSourceOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：图像算术与逻辑代数运算 (Image Arithmetic)\n\n"
+    return "### 📘 算子原理：多分支双图合并复合运算 (Branch Merge & Blending)\n\n"
            "**【核心思想】**\n"
-           "对两幅对齐的图像（或当前图与原图/纯色底板）执行逐像素点对点的代数加减、乘除融合、差分与布尔逻辑运算，是工业缺陷比对与掩码抠图的核心基石。\n\n"
+           "将当前流程的处理结果与指定的**分支流水线输出**（或主流水线、原始图像）进行逐像素点对点的代数加减、乘除融合、差分与布尔逻辑运算，完成多分支视觉工作流的最终汇合。\n\n"
            "**【主要运算模型与数学公式】**\n"
            "```\n"
            "   1. 线性加权融合 (addWeighted):\n"
-           "        dst(x, y) = saturate( α·src₁(x, y) + β·src₂(x, y) + γ )\n"
+           "        dst(x, y) = saturate( α·current(x, y) + β·target(x, y) + γ )\n"
            "\n"
            "   2. 绝对值差分 (absdiff - 工业标准缺陷检测):\n"
-           "        dst(x, y) = | src₁(x, y) - src₂(x, y) |\n"
+           "        dst(x, y) = | current(x, y) - target(x, y) |\n"
            "\n"
            "   3. 饱和代数加/减法 (add / subtract):\n"
-           "        dst_add(x, y) = min(src₁ + src₂, 255)\n"
-           "        dst_sub(x, y) = max(src₁ - src₂, 0)\n"
+           "        dst_add(x, y) = min(current + target, 255)\n"
+           "        dst_sub(x, y) = max(current - target, 0)\n"
            "\n"
            "   4. 按位布尔运算 (bitwise_and / bitwise_or / bitwise_xor):\n"
-           "        dst_and(x, y) = src₁(x, y) & src₂(x, y)  (掩码 ROI 提取)\n"
-           "        dst_xor(x, y) = src₁(x, y) ^ src₂(x, y)  (微小结构变化提取)\n"
+           "        dst_and(x, y) = current(x, y) & target(x, y)  (掩码 ROI 提取)\n"
+           "        dst_xor(x, y) = current(x, y) ^ target(x, y)  (差异特征提取)\n"
            "```\n\n"
-           "**【工程应用建议】**\n"
-           "- 缺陷检测：将标准良品金样与待测工件对齐后执行 AbsDiff，差值大于阈值即为缺陷；\n"
-           "- 掩码提取：与二值 Mask 执行 Bitwise AND，可无损抠取指定 ROI 区域。";
+           "**【典型分支使用流】**\n"
+           "1. 主流水线处理完预处理后，点击【🌿 创建分支】生成“分支 1”；\n"
+           "2. 在“分支 1”中进行 Sobel/Canny 边缘提取或形态学运算；\n"
+           "3. 在主流水线（或另一分支）中添加本算子，目标分支选【分支 1】，模式选【绝对值差分】或【按位与】，即可直接将两个分支的处理结果进行合并！";
 }
 
 bool BlendWithSourceOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    if (input.empty())
+    {
+        errorMsg = "输入图像为空";
+        return false;
+    }
 
     int secSource = _params[0].GetInt();
     int opMode = _params[1].GetInt();
@@ -109,36 +217,10 @@ bool BlendWithSourceOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
     double beta = _params[3].GetDouble();
     int gamma = _params[4].GetInt();
 
-    cv::Mat secondImg;
-    if (secSource == 0) // 原始输入图像
+    cv::Mat targetImg = ResolveBranchImage(secSource, input, input.size(), input.channels());
+    if (targetImg.empty())
     {
-        secondImg = PipelineContext::Instance().GetSourceImage();
-        if (secondImg.empty()) secondImg = input.clone();
-    }
-    else if (secSource == 1) // 纯白
-    {
-        secondImg = cv::Mat(input.size(), input.type(), cv::Scalar::all(255));
-    }
-    else // 纯黑
-    {
-        secondImg = cv::Mat(input.size(), input.type(), cv::Scalar::all(0));
-    }
-
-    // 尺寸与通道一致性对齐
-    if (secondImg.size() != input.size())
-    {
-        cv::resize(secondImg, secondImg, input.size());
-    }
-    if (secondImg.channels() != input.channels())
-    {
-        if (input.channels() == 3 && secondImg.channels() == 1)
-        {
-            cv::cvtColor(secondImg, secondImg, cv::COLOR_GRAY2BGR);
-        }
-        else if (input.channels() == 1 && secondImg.channels() == 3)
-        {
-            cv::cvtColor(secondImg, secondImg, cv::COLOR_BGR2GRAY);
-        }
+        targetImg = input.clone();
     }
 
     try
@@ -146,32 +228,42 @@ bool BlendWithSourceOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
         switch (opMode)
         {
             case 0: // AddWeighted
-                cv::addWeighted(input, alpha, secondImg, beta, gamma, output);
+                cv::addWeighted(input, alpha, targetImg, beta, gamma, output);
                 break;
             case 1: // AbsDiff
-                cv::absdiff(input, secondImg, output);
+                cv::absdiff(input, targetImg, output);
                 break;
             case 2: // Bitwise AND
-                cv::bitwise_and(input, secondImg, output);
+                cv::bitwise_and(input, targetImg, output);
                 break;
             case 3: // Bitwise OR
-                cv::bitwise_or(input, secondImg, output);
+                cv::bitwise_or(input, targetImg, output);
                 break;
             case 4: // Bitwise XOR
-                cv::bitwise_xor(input, secondImg, output);
+                cv::bitwise_xor(input, targetImg, output);
                 break;
             case 5: // Add
-                cv::add(input, secondImg, output);
+                cv::add(input, targetImg, output);
                 break;
             case 6: // Subtract
-                cv::subtract(input, secondImg, output);
+                cv::subtract(input, targetImg, output);
                 break;
             case 7: // Max
-                cv::max(input, secondImg, output);
+                cv::max(input, targetImg, output);
                 break;
             case 8: // Min
-                cv::min(input, secondImg, output);
+                cv::min(input, targetImg, output);
                 break;
+            case 9: // Multiply
+                cv::multiply(input, targetImg, output, 1.0 / 255.0);
+                break;
+            case 10: // Divide
+            {
+                cv::Mat safeTarget;
+                cv::max(targetImg, cv::Scalar::all(1), safeTarget);
+                cv::divide(input, safeTarget, output, 255.0);
+                break;
+            }
             default:
                 output = input.clone();
                 break;
@@ -187,114 +279,148 @@ bool BlendWithSourceOp::Process(const cv::Mat& input, cv::Mat& output, std::stri
 
 std::string BlendWithSourceOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
+    int secSource = _params[0].GetInt();
     int opMode = _params[1].GetInt();
     double alpha = _params[2].GetDouble();
     double beta = _params[3].GetDouble();
     int gamma = _params[4].GetInt();
 
-    std::stringstream ss;
-    ss << "// 双图与原图算术复合运算 (模式: " << opMode << ")\n"
-       << "cv::Mat secondImg = source_image; // 原始基准图/模板图\n"
-       << "if (secondImg.size() != " << inVar << ".size()) cv::resize(secondImg, secondImg, " << inVar << ".size());\n";
+    std::string targetExpr = GetBranchCppExpr(secSource, inVar);
 
-    if (opMode == 0)
+    std::stringstream ss;
+    ss << "// 双图与分支复合运算 (模式: " << opMode << ")\n"
+       << "cv::Mat merge_target = " << targetExpr << ";\n"
+       << "if (merge_target.size() != " << inVar << ".size()) cv::resize(merge_target, merge_target, " << inVar << ".size());\n"
+       << "if (merge_target.channels() != " << inVar << ".channels()) {\n"
+       << "    if (" << inVar << ".channels() == 3) cv::cvtColor(merge_target, merge_target, cv::COLOR_GRAY2BGR);\n"
+       << "    else cv::cvtColor(merge_target, merge_target, cv::COLOR_BGR2GRAY);\n"
+       << "}\n";
+
+    switch (opMode)
     {
-        ss << "double alpha = " << alpha << ", beta = " << beta << ", gamma = " << gamma << ";\n"
-           << "cv::addWeighted(" << inVar << ", alpha, secondImg, beta, gamma, " << outVar << ");";
-    }
-    else if (opMode == 1)
-    {
-        ss << "cv::absdiff(" << inVar << ", secondImg, " << outVar << "); // 绝对值差分缺陷检测";
-    }
-    else if (opMode == 2)
-    {
-        ss << "cv::bitwise_and(" << inVar << ", secondImg, " << outVar << "); // 按位与掩码相交";
-    }
-    else if (opMode == 3)
-    {
-        ss << "cv::bitwise_or(" << inVar << ", secondImg, " << outVar << ");";
-    }
-    else if (opMode == 4)
-    {
-        ss << "cv::bitwise_xor(" << inVar << ", secondImg, " << outVar << ");";
-    }
-    else if (opMode == 5)
-    {
-        ss << "cv::add(" << inVar << ", secondImg, " << outVar << ");";
-    }
-    else if (opMode == 6)
-    {
-        ss << "cv::subtract(" << inVar << ", secondImg, " << outVar << ");";
-    }
-    else if (opMode == 7)
-    {
-        ss << "cv::max(" << inVar << ", secondImg, " << outVar << ");";
-    }
-    else
-    {
-        ss << "cv::min(" << inVar << ", secondImg, " << outVar << ");";
+        case 0:
+            ss << "cv::addWeighted(" << inVar << ", " << alpha << ", merge_target, " << beta << ", " << gamma << ", " << outVar << ");";
+            break;
+        case 1:
+            ss << "cv::absdiff(" << inVar << ", merge_target, " << outVar << "); // 绝对值差分比对";
+            break;
+        case 2:
+            ss << "cv::bitwise_and(" << inVar << ", merge_target, " << outVar << ");";
+            break;
+        case 3:
+            ss << "cv::bitwise_or(" << inVar << ", merge_target, " << outVar << ");";
+            break;
+        case 4:
+            ss << "cv::bitwise_xor(" << inVar << ", merge_target, " << outVar << ");";
+            break;
+        case 5:
+            ss << "cv::add(" << inVar << ", merge_target, " << outVar << ");";
+            break;
+        case 6:
+            ss << "cv::subtract(" << inVar << ", merge_target, " << outVar << ");";
+            break;
+        case 7:
+            ss << "cv::max(" << inVar << ", merge_target, " << outVar << ");";
+            break;
+        case 8:
+            ss << "cv::min(" << inVar << ", merge_target, " << outVar << ");";
+            break;
+        case 9:
+            ss << "cv::multiply(" << inVar << ", merge_target, " << outVar << ", 1.0 / 255.0);";
+            break;
+        case 10:
+            ss << "cv::Mat safe_b; cv::max(merge_target, cv::Scalar::all(1), safe_b);\n"
+               << "cv::divide(" << inVar << ", safe_b, " << outVar << ", 255.0);";
+            break;
+        default:
+            ss << outVar << " = " << inVar << ".clone();";
+            break;
     }
     return ss.str();
 }
 
 std::string BlendWithSourceOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
+    int secSource = _params[0].GetInt();
     int opMode = _params[1].GetInt();
     double alpha = _params[2].GetDouble();
     double beta = _params[3].GetDouble();
     int gamma = _params[4].GetInt();
 
-    std::stringstream ss;
-    ss << "# 双图与原图算术复合运算 (模式: " << opMode << ")\n"
-       << "second_img = source_image\n"
-       << "if second_img.shape[:2] != " << inVar << ".shape[:2]:\n"
-       << "    second_img = cv2.resize(second_img, (" << inVar << ".shape[1], " << inVar << ".shape[0]))\n";
+    std::string targetExpr = GetBranchPythonExpr(secSource, inVar);
 
-    if (opMode == 0)
+    std::stringstream ss;
+    ss << "# 双图与分支复合运算 (模式: " << opMode << ")\n"
+       << "merge_target = " << targetExpr << "\n"
+       << "if merge_target.shape[:2] != " << inVar << ".shape[:2]:\n"
+       << "    merge_target = cv2.resize(merge_target, (" << inVar << ".shape[1], " << inVar << ".shape[0]))\n";
+
+    switch (opMode)
     {
-        ss << "alpha, beta, gamma = " << alpha << ", " << beta << ", " << gamma << "\n"
-           << outVar << " = cv2.addWeighted(" << inVar << ", alpha, second_img, beta, gamma)";
-    }
-    else if (opMode == 1)
-    {
-        ss << outVar << " = cv2.absdiff(" << inVar << ", second_img) # 绝对值差分缺陷检测";
-    }
-    else if (opMode == 2)
-    {
-        ss << outVar << " = cv2.bitwise_and(" << inVar << ", second_img)";
-    }
-    else if (opMode == 3)
-    {
-        ss << outVar << " = cv2.bitwise_or(" << inVar << ", second_img)";
-    }
-    else if (opMode == 4)
-    {
-        ss << outVar << " = cv2.bitwise_xor(" << inVar << ", second_img)";
-    }
-    else if (opMode == 5)
-    {
-        ss << outVar << " = cv2.add(" << inVar << ", second_img)";
-    }
-    else if (opMode == 6)
-    {
-        ss << outVar << " = cv2.subtract(" << inVar << ", second_img)";
-    }
-    else if (opMode == 7)
-    {
-        ss << outVar << " = cv2.max(" << inVar << ", second_img)";
-    }
-    else
-    {
-        ss << outVar << " = cv2.min(" << inVar << ", second_img)";
+        case 0:
+            ss << outVar << " = cv2.addWeighted(" << inVar << ", " << alpha << ", merge_target, " << beta << ", " << gamma << ")";
+            break;
+        case 1:
+            ss << outVar << " = cv2.absdiff(" << inVar << ", merge_target) # 绝对值差分比对";
+            break;
+        case 2:
+            ss << outVar << " = cv2.bitwise_and(" << inVar << ", merge_target)";
+            break;
+        case 3:
+            ss << outVar << " = cv2.bitwise_or(" << inVar << ", merge_target)";
+            break;
+        case 4:
+            ss << outVar << " = cv2.bitwise_xor(" << inVar << ", merge_target)";
+            break;
+        case 5:
+            ss << outVar << " = cv2.add(" << inVar << ", merge_target)";
+            break;
+        case 6:
+            ss << outVar << " = cv2.subtract(" << inVar << ", merge_target)";
+            break;
+        case 7:
+            ss << outVar << " = cv2.max(" << inVar << ", merge_target)";
+            break;
+        case 8:
+            ss << outVar << " = cv2.min(" << inVar << ", merge_target)";
+            break;
+        case 9:
+            ss << outVar << " = cv2.multiply(" << inVar << ", merge_target, scale=1.0/255.0)";
+            break;
+        case 10:
+            ss << "safe_b = np.maximum(merge_target, 1)\n"
+               << outVar << " = cv2.divide(" << inVar << ".astype(np.float32), safe_b.astype(np.float32), scale=255.0).astype(np.uint8)";
+            break;
+        default:
+            ss << outVar << " = " << inVar << ".copy()";
+            break;
     }
     return ss.str();
 }
 
 // ============================================================================
-// 2. MaskApplyOp (掩码抠图与原图ROI提取)
+// 2. MaskApplyOp (掩码抠图与ROI提取)
 // ============================================================================
 MaskApplyOp::MaskApplyOp()
 {
+    // 0. 目标图源
+    OpParameter targetSrcParam;
+    targetSrcParam.Name = "targetSource";
+    targetSrcParam.DisplayName = "目标底图图像源 (Target Image Source)";
+    targetSrcParam.Type = ParamType::ComboBox;
+    targetSrcParam.Value = 0; // 原始输入图像
+    targetSrcParam.EnumOptions = {
+        "原始输入图像 (Original Source Image)",
+        "主流水线最终输出 (Main Pipeline Output)",
+        "分支 1 (Branch 1 Output)",
+        "分支 2 (Branch 2 Output)",
+        "分支 3 (Branch 3 Output)",
+        "分支 4 (Branch 4 Output)"
+    };
+    targetSrcParam.Tooltip = "选择要从中提取彩色/灰度目标区域的底图";
+    _params.push_back(targetSrcParam);
+
+    // 1. 掩码判定阈值
     OpParameter threshParam;
     threshParam.Name = "maskThresh";
     threshParam.DisplayName = "掩码生效判定阈值 (Mask Cutoff)";
@@ -305,6 +431,7 @@ MaskApplyOp::MaskApplyOp()
     threshParam.Step = 1;
     _params.push_back(threshParam);
 
+    // 2. 反转掩码
     OpParameter invertParam;
     invertParam.Name = "invertMask";
     invertParam.DisplayName = "掩码反转 (Invert Mask / 提取背景)";
@@ -312,6 +439,7 @@ MaskApplyOp::MaskApplyOp()
     invertParam.Value = false;
     _params.push_back(invertParam);
 
+    // 3. 背景填充模式
     OpParameter bgParam;
     bgParam.Name = "bgMode";
     bgParam.DisplayName = "非目标背景填充 (Background Fill)";
@@ -327,27 +455,47 @@ MaskApplyOp::MaskApplyOp()
 
 std::string MaskApplyOp::GetPrincipleDoc() const
 {
-    return "### 📘 算子原理：掩码抠图与原图ROI高保真提取 (Mask Apply)\n\n"
-           "将二值分割图转换为 8 位单通道 Mask 掩码：\n"
-           "$$dst(x, y) = \\begin{cases} src(x, y) & \\text{if } mask(x, y) > \\text{Thresh} \\\\ \\text{BackgroundColor} & \\text{otherwise} \\end{cases}$$\n"
-           "实现对分割目标区域的彩色高保真提取，同时清除复杂的生产背景杂乱噪点。";
+    return "### 📘 算子原理：掩码抠图与目标ROI高保真提取 (Mask Apply)\n\n"
+           "**【核心思想】**\n"
+           "将当前流程的二值分割结果转换为 8 位单通道 Mask 掩码，并精准作用回目标彩色/灰度图像（如原始输入图、主流水线或指定分支）：\n"
+           "$$dst(x, y) = \\begin{cases} target(x, y) & \\text{if } mask(x, y) > \\text{Thresh} \\\\ \\text{BackgroundColor} & \\text{otherwise} \\end{cases}$$\n"
+           "实现对分割目标区域的彩色高保真无损提取，同时清除复杂的工业背景杂乱噪点。";
 }
 
 bool MaskApplyOp::Process(const cv::Mat& input, cv::Mat& output, std::string& errorMsg)
 {
-    if (input.empty()) { errorMsg = "输入图像为空"; return false; }
+    if (input.empty())
+    {
+        errorMsg = "输入图像为空";
+        return false;
+    }
 
-    cv::Mat orig = PipelineContext::Instance().GetSourceImage();
-    if (orig.empty()) orig = input.clone();
-    if (orig.size() != input.size()) cv::resize(orig, orig, input.size());
+    int targetSrc = _params[0].GetInt();
+    int cutoff = _params[1].GetInt();
+    bool inv = _params[2].GetBool();
+    int bgMode = _params[3].GetInt();
 
-    int cutoff = _params[0].GetInt();
-    bool inv = _params[1].GetBool();
-    int bgMode = _params[2].GetInt();
+    cv::Mat targetMat;
+    if (targetSrc == 0)
+    {
+        targetMat = PipelineContext::Instance().GetSourceImage();
+    }
+    else if (targetSrc == 1)
+    {
+        targetMat = PipelineContext::Instance().GetBranch("主流水线");
+        if (targetMat.empty()) targetMat = PipelineContext::Instance().GetSourceImage();
+    }
+    else
+    {
+        targetMat = PipelineContext::Instance().GetBranch("分支 " + std::to_string(targetSrc - 1));
+        if (targetMat.empty()) targetMat = PipelineContext::Instance().GetSourceImage();
+    }
+
+    if (targetMat.empty()) targetMat = input.clone();
+    if (targetMat.size() != input.size()) cv::resize(targetMat, targetMat, input.size());
 
     try
     {
-        // 构造单通道 0/255 二值掩码
         cv::Mat mask;
         if (input.channels() > 1) cv::cvtColor(input, mask, cv::COLOR_BGR2GRAY);
         else mask = input.clone();
@@ -356,20 +504,20 @@ bool MaskApplyOp::Process(const cv::Mat& input, cv::Mat& output, std::string& er
 
         if (bgMode == 0) // 纯黑
         {
-            output = cv::Mat::zeros(orig.size(), orig.type());
-            orig.copyTo(output, mask);
+            output = cv::Mat::zeros(targetMat.size(), targetMat.type());
+            targetMat.copyTo(output, mask);
         }
         else if (bgMode == 1) // 纯白
         {
-            output = cv::Mat(orig.size(), orig.type(), cv::Scalar::all(255));
-            orig.copyTo(output, mask);
+            output = cv::Mat(targetMat.size(), targetMat.type(), cv::Scalar::all(255));
+            targetMat.copyTo(output, mask);
         }
         else // 暗化背景
         {
             cv::Mat darkOrig;
-            orig.convertTo(darkOrig, -1, 0.25, 0);
+            targetMat.convertTo(darkOrig, -1, 0.25, 0);
             output = darkOrig.clone();
-            orig.copyTo(output, mask);
+            targetMat.copyTo(output, mask);
         }
         return true;
     }
@@ -382,53 +530,79 @@ bool MaskApplyOp::Process(const cv::Mat& input, cv::Mat& output, std::string& er
 
 std::string MaskApplyOp::GenerateCppCode(const std::string& inVar, const std::string& outVar) const
 {
-    int cutoff = _params[0].GetInt();
-    bool inv = _params[1].GetBool();
-    int bgMode = _params[2].GetInt();
+    int targetSrc = _params[0].GetInt();
+    int cutoff = _params[1].GetInt();
+    bool inv = _params[2].GetBool();
+    int bgMode = _params[3].GetInt();
+
+    std::string targetExpr = (targetSrc == 0) ? "source_image" : ((targetSrc == 1) ? "main_pipeline_out" : ("branch_" + std::to_string(targetSrc - 1) + "_out"));
 
     std::stringstream ss;
-    ss << "// 掩码抠图与原图ROI提取\n"
+    ss << "// 掩码抠图与目标ROI高保真提取\n"
+       << "cv::Mat target_img = " << targetExpr << ";\n"
+       << "if (target_img.size() != " << inVar << ".size()) cv::resize(target_img, target_img, " << inVar << ".size());\n"
        << "cv::Mat mask;\n"
        << "if (" << inVar << ".channels() > 1) cv::cvtColor(" << inVar << ", mask, cv::COLOR_BGR2GRAY);\n"
        << "else mask = " << inVar << ".clone();\n"
        << "cv::threshold(mask, mask, " << cutoff << ", 255, " << (inv ? "cv::THRESH_BINARY_INV" : "cv::THRESH_BINARY") << ");\n";
     if (bgMode == 0)
     {
-        ss << outVar << " = cv::Mat::zeros(source_image.size(), source_image.type());\n"
-           << "source_image.copyTo(" << outVar << ", mask);";
+        ss << outVar << " = cv::Mat::zeros(target_img.size(), target_img.type());\n"
+           << "target_img.copyTo(" << outVar << ", mask);";
     }
     else if (bgMode == 1)
     {
-        ss << outVar << " = cv::Mat(source_image.size(), source_image.type(), cv::Scalar::all(255));\n"
-           << "source_image.copyTo(" << outVar << ", mask);";
+        ss << outVar << " = cv::Mat(target_img.size(), target_img.type(), cv::Scalar::all(255));\n"
+           << "target_img.copyTo(" << outVar << ", mask);";
     }
     else
     {
-        ss << "source_image.convertTo(" << outVar << ", -1, 0.25, 0);\n"
-           << "source_image.copyTo(" << outVar << ", mask);";
+        ss << "target_img.convertTo(" << outVar << ", -1, 0.25, 0);\n"
+           << "target_img.copyTo(" << outVar << ", mask);";
     }
     return ss.str();
 }
 
 std::string MaskApplyOp::GeneratePythonCode(const std::string& inVar, const std::string& outVar) const
 {
-    int cutoff = _params[0].GetInt();
-    bool inv = _params[1].GetBool();
-    int bgMode = _params[2].GetInt();
+    int targetSrc = _params[0].GetInt();
+    int cutoff = _params[1].GetInt();
+    bool inv = _params[2].GetBool();
+    int bgMode = _params[3].GetInt();
+
+    std::string targetExpr = (targetSrc == 0) ? "source_image" : ((targetSrc == 1) ? "main_pipeline_out" : ("branch_" + std::to_string(targetSrc - 1) + "_out"));
 
     std::stringstream ss;
-    ss << "# 掩码抠图与原图ROI提取\n"
+    ss << "# 掩码抠图与目标ROI高保真提取\n"
+       << "target_img = " << targetExpr << "\n"
+       << "if target_img.shape[:2] != " << inVar << ".shape[:2]:\n"
+       << "    target_img = cv2.resize(target_img, (" << inVar << ".shape[1], " << inVar << ".shape[0]))\n"
        << "mask = " << inVar << " if len(" << inVar << ".shape) == 2 else cv2.cvtColor(" << inVar << ", cv2.COLOR_BGR2GRAY)\n"
        << "_, mask = cv2.threshold(mask, " << cutoff << ", 255, " << (inv ? "cv2.THRESH_BINARY_INV" : "cv2.THRESH_BINARY") << ")\n";
     if (bgMode == 0)
     {
-        ss << outVar << " = np.zeros_like(source_image)\n"
-           << outVar << " = cv2.bitwise_and(source_image, source_image, mask=mask)";
+        ss << outVar << " = np.zeros_like(target_img)\n"
+           << "if len(target_img.shape) == 3:\n"
+           << "    np.copyto(" << outVar << ", target_img, where=(mask[:, :, None] > 0))\n"
+           << "else:\n"
+           << "    np.copyto(" << outVar << ", target_img, where=(mask > 0))";
+    }
+    else if (bgMode == 1)
+    {
+        ss << outVar << " = np.full_like(target_img, 255)\n"
+           << "if len(target_img.shape) == 3:\n"
+           << "    np.copyto(" << outVar << ", target_img, where=(mask[:, :, None] > 0))\n"
+           << "else:\n"
+           << "    np.copyto(" << outVar << ", target_img, where=(mask > 0))";
     }
     else
     {
-        ss << outVar << " = np.full_like(source_image, 255)\n"
-           << "np.copyto(" << outVar << ", source_image, where=(mask[:, :, None] > 0))";
+        ss << "dark = (target_img * 0.25).astype(np.uint8)\n"
+           << outVar << " = dark.copy()\n"
+           << "if len(target_img.shape) == 3:\n"
+           << "    np.copyto(" << outVar << ", target_img, where=(mask[:, :, None] > 0))\n"
+           << "else:\n"
+           << "    np.copyto(" << outVar << ", target_img, where=(mask > 0))";
     }
     return ss.str();
 }
@@ -518,3 +692,4 @@ std::string ThresholdTruncateOp::GeneratePythonCode(const std::string& inVar, co
        << "_, " << outVar << " = cv2.threshold(" << inVar << ", thresh_val, 255, thresh_type)";
     return ss.str();
 }
+

@@ -246,19 +246,35 @@ QPushButton:pressed {
     background-color: #094771;
 }
 
-QTreeWidget, QListWidget {
+QTreeWidget, QListWidget, QTableWidget {
     background-color: #1e1e1e;
-    color: #cccccc;
+    alternate-background-color: #252526;
+    color: #d4d4d4;
     border: 1px solid #3e3e42;
     border-radius: 3px;
+    outline: none;
+}
+
+QTreeWidget::item, QListWidget::item {
+    padding: 4px 6px;
+    min-height: 22px;
+    border: 1px solid transparent;
+    border-radius: 2px;
 }
 
 QTreeWidget::item:hover, QListWidget::item:hover {
-    background-color: #2a2d2e;
+    background-color: #2d2d30;
+    color: #ffffff;
 }
 
 QTreeWidget::item:selected, QListWidget::item:selected {
     background-color: #094771;
+    color: #ffffff;
+    border-color: #007acc;
+}
+
+QTreeWidget::item:selected:hover, QListWidget::item:selected:hover {
+    background-color: #115c92;
     color: #ffffff;
 }
 

@@ -8,6 +8,8 @@
 #include "core/operators/InteractiveMaskOp.h"
 #include "bll/PipelineManager.h"
 #include "bll/ProjectManager.h"
+#include "codegen/CppCodeGenerator.h"
+#include "codegen/PythonCodeGenerator.h"
 #include "utils/ImageIoUtils.h"
 #include "utils/MatUtils.h"
 #include "utils/AppSettings.h"
@@ -377,6 +379,102 @@ void TestInteractiveMaskMultipleShapes()
     Require(rotOp.Process(input, rotMask, error), "Rotated rect mask generation failed: " + error);
     Require(!rotMask.empty() && rotMask.size() == input.size(), "Rotated rect mask size mismatch");
 }
+
+void TestBranchPipelineAndDualImageArithmetic()
+{
+    std::string error;
+    cv::Mat srcImg(100, 100, CV_8UC3, cv::Scalar(50, 50, 50));
+    // 在中心画一个亮色方块
+    cv::rectangle(srcImg, cv::Rect(30, 30, 40, 40), cv::Scalar(200, 200, 200), -1);
+
+    PipelineManager pipeline;
+    pipeline.SetSourceImage(srcImg);
+
+    // 1. 在主流水线添加灰度化算子
+    auto grayOp = OpRegistry::Instance().Create("CvtColor");
+    Require(grayOp != nullptr, "failed to create CvtColor operator");
+    Require(grayOp->SetParameter("code", 0), "failed to set code to BGR2GRAY");
+    pipeline.AddStep(std::move(grayOp));
+
+    // 2. 一键创建新分支 "分支 1"
+    int b1Idx = pipeline.CreateBranch("分支 1");
+    Require(b1Idx == 1, "created branch index mismatch");
+    Require(pipeline.GetBranchCount() == 2, "branch count mismatch");
+
+    // 3. 在 "分支 1" 中添加 Canny 边缘检测
+    auto cannyOp = OpRegistry::Instance().Create("Canny");
+    Require(cannyOp != nullptr, "failed to create Canny operator");
+    pipeline.AddStep(std::move(cannyOp));
+
+    // 4. 切换回主流水线 (Branch 0)
+    pipeline.SetActiveBranchIndex(0);
+    Require(pipeline.GetActiveBranchIndex() == 0, "failed to switch back to Main branch");
+
+    // 5. 在主流水线添加双图复合算子 (合并目标选 分支 1，模式选 AbsDiff 差分)
+    auto blendOp = OpRegistry::Instance().Create("BlendWithSource");
+    Require(blendOp != nullptr, "failed to create BlendWithSource operator");
+    Require(blendOp->SetParameter("secondSource", 1), "failed to set secondSource to Branch 1"); // 1: 分支 1
+    Require(blendOp->SetParameter("opMode", 1), "failed to set opMode to AbsDiff"); // 1: AbsDiff
+    pipeline.AddStep(std::move(blendOp));
+
+    // 6. 执行整个多分支流水线
+    Require(pipeline.Execute(true), "multi-branch pipeline execution failed");
+
+    cv::Mat mainFinal = pipeline.GetFinalOutput();
+    Require(!mainFinal.empty(), "main pipeline output is empty");
+    Require(mainFinal.size() == srcImg.size(), "main pipeline output size mismatch");
+
+    cv::Mat b1Final = pipeline.GetBranchFinalOutput(1);
+    Require(!b1Final.empty(), "branch 1 output is empty");
+
+    // 7. 测试分支流程修改时，主流水线的复合结果自动级联刷新
+    cv::Mat oldMainOut = mainFinal.clone();
+    // 切换到分支 1 并禁用 Canny
+    pipeline.SetActiveBranchIndex(1);
+    PipelineStep* b1CannyStep = pipeline.GetStep(0);
+    Require(b1CannyStep != nullptr, "b1 canny step is null");
+    b1CannyStep->SetEnabled(false);
+    pipeline.MarkDirtyFrom(0);
+    Require(pipeline.Execute(), "pipeline execute failed after branch modification");
+
+    // 切换回主流水线验证结果是否已经刷新（不再等于旧复合图）
+    pipeline.SetActiveBranchIndex(0);
+    cv::Mat newMainOut = pipeline.GetFinalOutput();
+    Require(!newMainOut.empty(), "new main output is empty");
+    cv::Mat diff;
+    cv::absdiff(oldMainOut, newMainOut, diff);
+    Require(cv::countNonZero(diff.reshape(1)) > 0, "main pipeline failed to cascade update when branch 1 was modified");
+
+    // 8. 测试一键全选与全部取消切换
+    pipeline.SetActiveBranchIndex(1);
+    Require(!pipeline.AreAllStepsEnabled(), "branch 1 has a disabled step");
+    pipeline.SetAllStepsEnabled(true);
+    Require(pipeline.AreAllStepsEnabled(), "branch 1 steps should be re-enabled");
+
+    // 9. 测试多分支工程持久化与导入
+    QTemporaryDir tempDir;
+    QString projFile = tempDir.filePath("branch_project.json");
+    QString saveErr;
+    Require(ProjectManager::SaveProject(pipeline, projFile, saveErr), "SaveProject failed: " + saveErr.toStdString());
+
+    PipelineManager reloadedPipeline;
+    reloadedPipeline.SetSourceImage(srcImg);
+    QString loadErr;
+    Require(ProjectManager::LoadProject(reloadedPipeline, projFile, loadErr), "LoadProject failed: " + loadErr.toStdString());
+    Require(reloadedPipeline.GetBranchCount() == 2, "reloaded branch count mismatch");
+    Require(reloadedPipeline.GetBranchName(1) == "分支 1", "reloaded branch name mismatch");
+
+    // 9. 验证 C++ 与 Python 代码生成包含分支信息
+    CppCodeGenerator cppGen;
+    std::string cppCode = cppGen.Generate(pipeline, "test.png");
+    Require(cppCode.find("branch_1") != std::string::npos, "C++ code missing branch_1");
+    Require(cppCode.find("main_pipeline_out") != std::string::npos, "C++ code missing main_pipeline_out");
+
+    PythonCodeGenerator pyGen;
+    std::string pyCode = pyGen.Generate(pipeline, "test.png");
+    Require(pyCode.find("branch_1") != std::string::npos, "Python code missing branch_1");
+    Require(pyCode.find("main_pipeline_out") != std::string::npos, "Python code missing main_pipeline_out");
+}
 }
 
 int main(int argc, char* argv[])
@@ -396,6 +494,7 @@ int main(int argc, char* argv[])
         TestAppSettingsPathPersistence();
         TestPipelineBulkEnableDisable();
         TestInteractiveMaskMultipleShapes();
+        TestBranchPipelineAndDualImageArithmetic();
         std::cout << "All VisionStudio core tests passed." << std::endl;
         return 0;
     }

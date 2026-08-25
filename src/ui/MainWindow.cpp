@@ -160,8 +160,8 @@ void MainWindow::InitUiAndDocks()
     ui->actionImportProject->setIcon(IconUtils::CreateImportIcon());
     ui->actionExportProject->setIcon(IconUtils::CreateExportIcon());
     ui->actionRunPipeline->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    ui->actionEnableAllSteps->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
-    ui->actionDisableAllSteps->setIcon(IconUtils::CreateDeselectAllIcon(QColor(180, 180, 180), 32));
+    ui->actionToggleAllSteps->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
+    ui->actionCreateBranch->setIcon(style()->standardIcon(QStyle::SP_FileDialogNewFolder));
     ui->actionClearPipeline->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
     ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_DesktopIcon));
     ui->actionAbout->setIcon(QIcon(":/icons/app_icon.png")); // 专属应用 Logo
@@ -294,8 +294,12 @@ void MainWindow::SetupConnections()
     connect(ui->actionImportProject, &QAction::triggered, this, &MainWindow::OnImportProject);
     connect(ui->actionExportProject, &QAction::triggered, this, &MainWindow::OnExportProject);
     connect(ui->actionRunPipeline, &QAction::triggered, this, &MainWindow::OnRunPipeline);
-    connect(ui->actionEnableAllSteps, &QAction::triggered, this, [this]() { _pipelineManager.SetAllStepsEnabled(true); });
-    connect(ui->actionDisableAllSteps, &QAction::triggered, this, [this]() { _pipelineManager.SetAllStepsEnabled(false); });
+    connect(ui->actionToggleAllSteps, &QAction::triggered, this, [this]() {
+        _pipelineManager.SetAllStepsEnabled(!_pipelineManager.AreAllStepsEnabled());
+    });
+    connect(ui->actionCreateBranch, &QAction::triggered, this, [this]() {
+        _pipelineManager.CreateBranch();
+    });
     connect(ui->actionClearPipeline, &QAction::triggered, this, &MainWindow::OnClearPipeline);
     connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::OnAbout);
     connect(ui->actionResetLayout, &QAction::triggered, this, &MainWindow::OnResetLayout);
@@ -305,8 +309,15 @@ void MainWindow::SetupConnections()
     connect(_operatorTree, &OperatorTreeWidget::OperatorAddRequested, this, &MainWindow::OnOperatorAddRequested);
     connect(_operatorTree, &OperatorTreeWidget::OperatorSelected, _propertyPanel, &PropertyPanel::ShowOperatorPreview);
 
-    // 流水线联动
+    // 流水线与分支联动
     connect(_pipelineList, &PipelineListWidget::StepSelected, this, &MainWindow::OnStepSelected);
+    connect(_pipelineList, &PipelineListWidget::BranchSelected, this, [this](int branchIdx) {
+        const cv::Mat& branchOut = _pipelineManager.GetBranchFinalOutput(branchIdx);
+        if (!branchOut.empty())
+        {
+            _imageViewer->SetImage(branchOut);
+        }
+    });
     connect(&_pipelineManager, &PipelineManager::ExecutionCompleted, this, &MainWindow::OnPipelineExecutionCompleted);
 
     // 视口与直方图/剖面联动

@@ -64,8 +64,8 @@
      <string>流水线 (&amp;P)</string>
     </property>
     <addaction name="actionRunPipeline"/>
-    <addaction name="actionEnableAllSteps"/>
-    <addaction name="actionDisableAllSteps"/>
+    <addaction name="actionToggleAllSteps"/>
+    <addaction name="actionCreateBranch"/>
     <addaction name="separator"/>
     <addaction name="actionClearPipeline"/>
    </widget>
@@ -190,26 +190,26 @@
     <string>移除流水线中的全部算法节点</string>
    </property>
   </action>
-  <action name="actionEnableAllSteps">
+  <action name="actionToggleAllSteps">
    <property name="text">
-    <string>全部启用 (全选所有流程)</string>
+    <string>一键全选 / 取消全选</string>
    </property>
    <property name="toolTip">
-    <string>一键启用/全选流水线中所有流程步骤</string>
+    <string>一键切换当前分支所有步骤的启用状态</string>
    </property>
    <property name="statusTip">
-    <string>将当前流水线中所有算子步骤批量置为启用状态并重新执行</string>
+    <string>快速批量切换当前流水线分支中所有算子的启用/禁用状态</string>
    </property>
   </action>
-  <action name="actionDisableAllSteps">
+  <action name="actionCreateBranch">
    <property name="text">
-    <string>全部禁用 (一键取消)</string>
+    <string>创建新分支 (🌿 Fork Branch)</string>
    </property>
    <property name="toolTip">
-    <string>一键禁用/取消流水线中所有流程步骤</string>
+    <string>基于当前最新处理图像创建独立的分支流水线</string>
    </property>
    <property name="statusTip">
-    <string>将当前流水线中所有算子步骤批量置为禁用状态</string>
+    <string>将当前活跃流水线最新输出作为新分支基准输入并开启新分支流程</string>
    </property>
   </action>
   <action name="actionAbout">

@@ -34,45 +34,62 @@ bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString&
     rootObj["version"] = ProjectVersion;
     rootObj["appName"] = "VisionStudio OpenCV";
 
-    QJsonArray stepsArray;
-    for (int i = 0; i < pipeline.GetStepCount(); ++i)
+    QJsonArray branchesArray;
+    int branchCount = pipeline.GetBranchCount();
+    for (int b = 0; b < branchCount; ++b)
     {
-        const PipelineStep* step = pipeline.GetStep(i);
-        if (!step || !step->GetOpNode())
-        {
-            continue;
-        }
+        QJsonObject branchObj;
+        branchObj["name"] = QString::fromStdString(pipeline.GetBranchName(b));
 
-        IOpNode* op = step->GetOpNode();
-        QJsonObject stepObj;
-        stepObj["name"] = QString::fromStdString(op->GetName());
-        stepObj["enabled"] = step->IsEnabled();
-
-        QJsonObject paramsObj;
-        for (const auto& p : op->GetParameters())
+        QJsonArray stepsArray;
+        int stepCount = pipeline.GetBranchStepCount(b);
+        for (int i = 0; i < stepCount; ++i)
         {
-            if (p.Type == ParamType::IntSlider || p.Type == ParamType::ComboBox)
+            const PipelineStep* step = pipeline.GetBranchStep(b, i);
+            if (!step || !step->GetOpNode())
             {
-                paramsObj[QString::fromStdString(p.Name)] = p.GetInt();
+                continue;
             }
-            else if (p.Type == ParamType::DoubleSlider)
+
+            IOpNode* op = step->GetOpNode();
+            QJsonObject stepObj;
+            stepObj["name"] = QString::fromStdString(op->GetName());
+            stepObj["enabled"] = step->IsEnabled();
+
+            QJsonObject paramsObj;
+            for (const auto& p : op->GetParameters())
             {
-                paramsObj[QString::fromStdString(p.Name)] = p.GetDouble();
+                if (p.Type == ParamType::IntSlider || p.Type == ParamType::ComboBox)
+                {
+                    paramsObj[QString::fromStdString(p.Name)] = p.GetInt();
+                }
+                else if (p.Type == ParamType::DoubleSlider)
+                {
+                    paramsObj[QString::fromStdString(p.Name)] = p.GetDouble();
+                }
+                else if (p.Type == ParamType::CheckBox)
+                {
+                    paramsObj[QString::fromStdString(p.Name)] = p.GetBool();
+                }
+                else if (p.Type == ParamType::FilePath)
+                {
+                    paramsObj[QString::fromStdString(p.Name)] = QString::fromStdString(p.GetString());
+                }
             }
-            else if (p.Type == ParamType::CheckBox)
-            {
-                paramsObj[QString::fromStdString(p.Name)] = p.GetBool();
-            }
-            else if (p.Type == ParamType::FilePath)
-            {
-                paramsObj[QString::fromStdString(p.Name)] = QString::fromStdString(p.GetString());
-            }
+            stepObj["parameters"] = paramsObj;
+            stepsArray.append(stepObj);
         }
-        stepObj["parameters"] = paramsObj;
-        stepsArray.append(stepObj);
+        branchObj["steps"] = stepsArray;
+        branchesArray.append(branchObj);
+
+        // 兼容单分支格式
+        if (b == 0)
+        {
+            rootObj["pipeline"] = stepsArray;
+        }
     }
 
-    rootObj["pipeline"] = stepsArray;
+    rootObj["branches"] = branchesArray;
 
     QJsonDocument doc(rootObj);
     QFile file(filePath);
@@ -127,76 +144,153 @@ bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& fileP
         errorMsg = "不支持的工程文件版本: " + version;
         return false;
     }
-    if (!rootObj["pipeline"].isArray())
-    {
-        errorMsg = "工程文件缺少有效的 pipeline 数组";
-        return false;
-    }
 
-    QJsonArray stepsArray = rootObj["pipeline"].toArray();
     struct LoadedStep
     {
         std::unique_ptr<IOpNode> Operator;
         bool Enabled = true;
     };
-    std::vector<LoadedStep> loadedSteps;
-    loadedSteps.reserve(static_cast<size_t>(stepsArray.size()));
 
-    for (int stepIndex = 0; stepIndex < stepsArray.size(); ++stepIndex)
+    struct LoadedBranch
     {
-        const QJsonValue val = stepsArray[stepIndex];
-        if (!val.isObject())
-        {
-            errorMsg = QString("第 %1 个步骤不是有效对象").arg(stepIndex + 1);
-            return false;
-        }
-        QJsonObject stepObj = val.toObject();
-        std::string opName = stepObj["name"].toString().toStdString();
-        bool enabled = stepObj["enabled"].toBool(true);
+        std::string Name;
+        std::vector<LoadedStep> Steps;
+    };
 
-        auto op = OpRegistry::Instance().Create(opName);
-        if (!op)
-        {
-            errorMsg = QString("第 %1 个步骤引用了未知算子: %2")
-                .arg(stepIndex + 1)
-                .arg(QString::fromStdString(opName));
-            return false;
-        }
+    std::vector<LoadedBranch> loadedBranches;
 
-        QJsonObject paramsObj = stepObj["parameters"].toObject();
-        for (auto& p : op->GetParameters())
+    if (rootObj.contains("branches") && rootObj["branches"].isArray())
+    {
+        QJsonArray branchesArray = rootObj["branches"].toArray();
+        for (int b = 0; b < branchesArray.size(); ++b)
         {
-            QString pName = QString::fromStdString(p.Name);
-            if (paramsObj.contains(pName))
+            QJsonObject bObj = branchesArray[b].toObject();
+            LoadedBranch lBranch;
+            lBranch.Name = bObj["name"].toString().toStdString();
+            if (lBranch.Name.empty())
             {
-                if (!ApplyJsonParameter(*op, p, paramsObj[pName]))
+                lBranch.Name = (b == 0) ? "主流水线 (Main)" : ("分支 " + std::to_string(b));
+            }
+
+            QJsonArray stepsArray = bObj["steps"].toArray();
+            for (int stepIndex = 0; stepIndex < stepsArray.size(); ++stepIndex)
+            {
+                QJsonObject stepObj = stepsArray[stepIndex].toObject();
+                std::string opName = stepObj["name"].toString().toStdString();
+                bool enabled = stepObj["enabled"].toBool(true);
+
+                auto op = OpRegistry::Instance().Create(opName);
+                if (!op)
                 {
-                    errorMsg = QString("第 %1 个步骤的参数 %2 类型错误或超出范围")
-                        .arg(stepIndex + 1)
-                        .arg(pName);
+                    errorMsg = QString("分支 %1 步骤 %2 引用了未知算子: %3")
+                                   .arg(QString::fromStdString(lBranch.Name))
+                                   .arg(stepIndex + 1)
+                                   .arg(QString::fromStdString(opName));
                     return false;
                 }
+
+                QJsonObject paramsObj = stepObj["parameters"].toObject();
+                for (auto& p : op->GetParameters())
+                {
+                    QString pName = QString::fromStdString(p.Name);
+                    if (paramsObj.contains(pName))
+                    {
+                        if (!ApplyJsonParameter(*op, p, paramsObj[pName]))
+                        {
+                            errorMsg = QString("分支 %1 步骤 %2 参数 %3 错误")
+                                           .arg(QString::fromStdString(lBranch.Name))
+                                           .arg(stepIndex + 1)
+                                           .arg(pName);
+                            return false;
+                        }
+                    }
+                }
+                lBranch.Steps.push_back({ std::move(op), enabled });
+            }
+            loadedBranches.push_back(std::move(lBranch));
+        }
+    }
+    else if (rootObj["pipeline"].isArray())
+    {
+        // 单分支兼容模式
+        LoadedBranch mainBranch;
+        mainBranch.Name = "主流水线 (Main)";
+        QJsonArray stepsArray = rootObj["pipeline"].toArray();
+        for (int stepIndex = 0; stepIndex < stepsArray.size(); ++stepIndex)
+        {
+            QJsonObject stepObj = stepsArray[stepIndex].toObject();
+            std::string opName = stepObj["name"].toString().toStdString();
+            bool enabled = stepObj["enabled"].toBool(true);
+
+            auto op = OpRegistry::Instance().Create(opName);
+            if (!op)
+            {
+                errorMsg = QString("第 %1 个步骤引用了未知算子: %2")
+                               .arg(stepIndex + 1)
+                               .arg(QString::fromStdString(opName));
+                return false;
+            }
+
+            QJsonObject paramsObj = stepObj["parameters"].toObject();
+            for (auto& p : op->GetParameters())
+            {
+                QString pName = QString::fromStdString(p.Name);
+                if (paramsObj.contains(pName))
+                {
+                    if (!ApplyJsonParameter(*op, p, paramsObj[pName]))
+                    {
+                        errorMsg = QString("第 %1 个步骤的参数 %2 错误").arg(stepIndex + 1).arg(pName);
+                        return false;
+                    }
+                }
+            }
+            mainBranch.Steps.push_back({ std::move(op), enabled });
+        }
+        loadedBranches.push_back(std::move(mainBranch));
+    }
+    else
+    {
+        errorMsg = "工程文件缺少有效的 pipeline 或 branches 数组";
+        return false;
+    }
+
+    // 重建分支结构
+    while (pipeline.GetBranchCount() > 1)
+    {
+        pipeline.RemoveBranch(1);
+    }
+    pipeline.SetActiveBranchIndex(0);
+    pipeline.Clear();
+
+    for (size_t b = 0; b < loadedBranches.size(); ++b)
+    {
+        if (b > 0)
+        {
+            pipeline.CreateBranch(loadedBranches[b].Name);
+        }
+        else
+        {
+            pipeline.SetBranchName(0, loadedBranches[b].Name);
+            pipeline.SetActiveBranchIndex(0);
+        }
+
+        for (auto& st : loadedBranches[b].Steps)
+        {
+            int sIdx = pipeline.AddStep(std::move(st.Operator));
+            PipelineStep* addedStep = pipeline.GetStep(sIdx);
+            if (addedStep)
+            {
+                addedStep->SetEnabled(st.Enabled);
             }
         }
-
-        loadedSteps.push_back({ std::move(op), enabled });
     }
 
-    pipeline.Clear();
-    for (auto& loadedStep : loadedSteps)
-    {
-        int stepIdx = pipeline.AddStep(std::move(loadedStep.Operator));
-        PipelineStep* addedStep = pipeline.GetStep(stepIdx);
-        if (addedStep)
-        {
-            addedStep->SetEnabled(loadedStep.Enabled);
-        }
-    }
-
+    pipeline.SetActiveBranchIndex(0);
     if (!pipeline.GetSourceImage().empty())
     {
         pipeline.Execute(true);
     }
+
     errorMsg.clear();
     return true;
 }

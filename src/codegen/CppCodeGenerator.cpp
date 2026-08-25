@@ -35,47 +35,73 @@ std::string CppCodeGenerator::Generate(const PipelineManager& pipeline, const st
        << "    std::cout << \"[Info] 图像加载成功，尺寸: \" << src.cols << \"x\" << src.rows << \" 通道: \" << src.channels() << std::endl;\n\n"
        << "    // 2. 初始化流水线变量与计时\n"
        << "    auto startTime = std::chrono::high_resolution_clock::now();\n\n"
-       << "    cv::Mat source_image = src.clone();\n"
-       << "    cv::Mat current = src.clone();\n\n";
+       << "    cv::Mat source_image = src.clone();\n\n";
 
-    int activeStepCount = 0;
-    for (int i = 0; i < pipeline.GetStepCount(); ++i)
+    int branchCount = pipeline.GetBranchCount();
+    std::string lastOverallVar = "source_image";
+
+    for (int b = 0; b < branchCount; ++b)
     {
-        const PipelineStep* step = pipeline.GetStep(i);
-        if (!step || !step->GetOpNode() || !step->IsEnabled())
+        std::string branchName = pipeline.GetBranchName(b);
+        std::string branchVarPrefix = (b == 0) ? "main" : ("branch_" + std::to_string(b));
+        std::string branchSrcVar = (b == 0) ? "src" : (branchVarPrefix + "_src");
+
+        ss << "    // ========================================================================\n"
+           << "    // 分支 " << b << ": " << branchName << "\n"
+           << "    // ========================================================================\n";
+
+        if (b > 0)
         {
-            continue;
+            ss << "    cv::Mat " << branchSrcVar << " = " << lastOverallVar << ".clone();\n";
         }
 
-        activeStepCount++;
-        IOpNode* op = step->GetOpNode();
-        std::string inVar = (activeStepCount == 1) ? "src" : ("step_" + std::to_string(activeStepCount - 1) + "_out");
-        std::string outVar = "step_" + std::to_string(activeStepCount) + "_out";
-
-        ss << "    // ---------------- Step " << activeStepCount << ": " << op->GetDisplayName() << " ----------------\n"
-           << "    cv::Mat " << outVar << ";\n"
-           << "    {\n";
-
-        std::string codeChunk = op->GenerateCppCode(inVar, outVar);
-        std::istringstream codeStream(codeChunk);
-        std::string line;
-        while (std::getline(codeStream, line))
+        int activeStepCount = 0;
+        int stepCount = pipeline.GetBranchStepCount(b);
+        for (int i = 0; i < stepCount; ++i)
         {
-            ss << "        " << line << "\n";
+            const PipelineStep* step = pipeline.GetBranchStep(b, i);
+            if (!step || !step->GetOpNode() || !step->IsEnabled())
+            {
+                continue;
+            }
+
+            activeStepCount++;
+            IOpNode* op = step->GetOpNode();
+            std::string inVar = (activeStepCount == 1) ? branchSrcVar : (branchVarPrefix + "_step_" + std::to_string(activeStepCount - 1) + "_out");
+            std::string outVar = branchVarPrefix + "_step_" + std::to_string(activeStepCount) + "_out";
+
+            ss << "    // --- [" << branchName << "] Step " << activeStepCount << ": " << op->GetDisplayName() << " ---\n"
+               << "    cv::Mat " << outVar << ";\n"
+               << "    {\n";
+
+            std::string codeChunk = op->GenerateCppCode(inVar, outVar);
+            std::istringstream codeStream(codeChunk);
+            std::string line;
+            while (std::getline(codeStream, line))
+            {
+                ss << "        " << line << "\n";
+            }
+
+            ss << "    }\n\n";
         }
 
-        ss << "    }\n\n";
+        std::string branchFinalVar = (activeStepCount == 0) ? branchSrcVar : (branchVarPrefix + "_step_" + std::to_string(activeStepCount) + "_out");
+        std::string branchOutVar = (b == 0) ? "main_pipeline_out" : ("branch_" + std::to_string(b) + "_out");
+        ss << "    cv::Mat " << branchOutVar << " = " << branchFinalVar << ";\n\n";
+
+        if (b == pipeline.GetActiveBranchIndex() || b == 0)
+        {
+            lastOverallVar = branchOutVar;
+        }
     }
-
-    std::string finalVar = (activeStepCount == 0) ? "src" : ("step_" + std::to_string(activeStepCount) + "_out");
 
     ss << "    auto endTime = std::chrono::high_resolution_clock::now();\n"
        << "    double elapsedMs = std::chrono::duration<double, std::milli>(endTime - startTime).count();\n"
        << "    std::cout << \"[Success] 流水线执行完毕，总耗时: \" << elapsedMs << \" ms\" << std::endl;\n\n"
        << "    // 3. 结果显示与保存\n"
        << "    cv::namedWindow(\"VisionStudio Pipeline Output\", cv::WINDOW_NORMAL);\n"
-       << "    cv::imshow(\"VisionStudio Pipeline Output\", " << finalVar << ");\n"
-       << "    cv::imwrite(\"output_result.jpg\", " << finalVar << ");\n"
+       << "    cv::imshow(\"VisionStudio Pipeline Output\", " << lastOverallVar << ");\n"
+       << "    cv::imwrite(\"output_result.jpg\", " << lastOverallVar << ");\n"
        << "    std::cout << \"[Info] 结果已保存至 output_result.jpg，按任意键退出...\" << std::endl;\n"
        << "    cv::waitKey(0);\n"
        << "    cv::destroyAllWindows();\n\n"

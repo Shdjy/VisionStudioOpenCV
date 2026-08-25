@@ -10,6 +10,7 @@
 #include "operators/HoughOps.h"
 #include "operators/FeatureOps.h"
 #include "operators/ArithmeticOps.h"
+#include "operators/BranchOps.h"
 #include "operators/InteractiveMaskOp.h"
 #include "operators/AdvancedOps.h"
 #include "operators/IndustrialOps.h"
@@ -102,7 +103,7 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<InRangeOp>();
     Register<ThresholdTruncateOp>();
 
-    // 4. 掩码与双图复合 (Mask & Image Arithmetic)
+    // 4. 掩码与双图复合运算 (Mask & Branch Arithmetic)
     Register<InteractiveMaskOp>();
     Register<MaskApplyOp>();
     Register<BlendWithSourceOp>();

@@ -94,6 +94,7 @@ set(CORE_SOURCES
     src/core/operators/HoughOps.cpp
     src/core/operators/FeatureOps.cpp
     src/core/operators/ArithmeticOps.cpp
+    src/core/operators/BranchOps.cpp
     src/core/operators/InteractiveMaskOp.cpp
     src/core/operators/AdvancedOps.cpp
     src/core/operators/IndustrialOps.cpp

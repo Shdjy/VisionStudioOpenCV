@@ -68,76 +68,89 @@
        </widget>
       </item>
       <item>
-       <widget class="QToolButton" name="btnSelectAll">
-        <property name="toolTip">
-         <string>一键全选/启用所有步骤 (Select All)</string>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="toolButtonStyle">
-         <enum>Qt::ToolButtonIconOnly</enum>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QToolButton" name="btnDeselectAll">
-        <property name="toolTip">
-         <string>一键取消/禁用所有步骤 (Deselect All)</string>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="toolButtonStyle">
-         <enum>Qt::ToolButtonIconOnly</enum>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QToolButton" name="btnClear">
-        <property name="toolTip">
-         <string>清空流水线所有步骤 (Clear)</string>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="toolButtonStyle">
-         <enum>Qt::ToolButtonIconOnly</enum>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QToolButton" name="btnRun">
-        <property name="toolTip">
-         <string>运行当前流水线 (Run / F5)</string>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="toolButtonStyle">
-         <enum>Qt::ToolButtonIconOnly</enum>
-        </property>
-       </widget>
-      </item>
+        <widget class="QToolButton" name="btnToggleAll">
+         <property name="toolTip">
+          <string>一键全选 / 取消全选切换 (Toggle Select All)</string>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonIconOnly</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="btnCreateBranch">
+         <property name="toolTip">
+          <string>基于当前最新输出创建新分支 (🌿 Fork Branch)</string>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonIconOnly</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="btnClear">
+         <property name="toolTip">
+          <string>清空当前流水线所有步骤 (Clear)</string>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonIconOnly</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QToolButton" name="btnRun">
+         <property name="toolTip">
+          <string>运行当前流水线 (Run / F5)</string>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonIconOnly</enum>
+         </property>
+        </widget>
+       </item>
      </layout>
     </item>
    <item>
     <widget class="QListWidget" name="listSteps">
      <property name="alternatingRowColors">
       <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTabBar" name="tabBranches">
+     <property name="tabsClosable">
+      <bool>true</bool>
+     </property>
+     <property name="movable">
+      <bool>false</bool>
      </property>
     </widget>
    </item>

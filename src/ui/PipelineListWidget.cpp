@@ -2,6 +2,7 @@
 #include "ui_PipelineListWidget.h"
 #include "../utils/IconUtils.h"
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QStyle>
 
 PipelineListWidget::PipelineListWidget(QWidget* parent)
@@ -29,20 +30,20 @@ PipelineListWidget::PipelineListWidget(QWidget* parent)
     ui->btnRemove->setFixedSize(btnSize);
     ui->btnRemove->setToolTip("删除所选算子步骤 (Delete / 红色❌)");
 
-    ui->btnSelectAll->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
-    ui->btnSelectAll->setIconSize(btnIconSize);
-    ui->btnSelectAll->setFixedSize(btnSize);
-    ui->btnSelectAll->setToolTip("一键全选/启用所有流程步骤 (Select All)");
+    ui->btnToggleAll->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
+    ui->btnToggleAll->setIconSize(btnIconSize);
+    ui->btnToggleAll->setFixedSize(btnSize);
+    ui->btnToggleAll->setToolTip("一键全选 / 取消全选切换 (Toggle Select All)");
 
-    ui->btnDeselectAll->setIcon(IconUtils::CreateDeselectAllIcon(QColor(180, 180, 180), 32));
-    ui->btnDeselectAll->setIconSize(btnIconSize);
-    ui->btnDeselectAll->setFixedSize(btnSize);
-    ui->btnDeselectAll->setToolTip("一键取消/禁用所有流程步骤 (Deselect All)");
+    ui->btnCreateBranch->setIcon(style()->standardIcon(QStyle::SP_FileDialogNewFolder));
+    ui->btnCreateBranch->setIconSize(btnIconSize);
+    ui->btnCreateBranch->setFixedSize(btnSize);
+    ui->btnCreateBranch->setToolTip("基于当前最新图像创建新分支 (🌿 Fork Branch)");
 
     ui->btnClear->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
     ui->btnClear->setIconSize(btnIconSize);
     ui->btnClear->setFixedSize(btnSize);
-    ui->btnClear->setToolTip("清空流水线所有步骤 (Clear)");
+    ui->btnClear->setToolTip("清空当前流水线所有步骤 (Clear)");
 
     ui->btnRun->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
     ui->btnRun->setIconSize(btnIconSize);
@@ -52,13 +53,29 @@ PipelineListWidget::PipelineListWidget(QWidget* parent)
     connect(ui->btnMoveUp, &QToolButton::clicked, this, &PipelineListWidget::OnMoveUpClicked);
     connect(ui->btnMoveDown, &QToolButton::clicked, this, &PipelineListWidget::OnMoveDownClicked);
     connect(ui->btnRemove, &QToolButton::clicked, this, &PipelineListWidget::OnRemoveClicked);
-    connect(ui->btnSelectAll, &QToolButton::clicked, this, &PipelineListWidget::OnSelectAllClicked);
-    connect(ui->btnDeselectAll, &QToolButton::clicked, this, &PipelineListWidget::OnDeselectAllClicked);
+    connect(ui->btnToggleAll, &QToolButton::clicked, this, &PipelineListWidget::OnToggleAllClicked);
+    connect(ui->btnCreateBranch, &QToolButton::clicked, this, &PipelineListWidget::OnCreateBranchClicked);
     connect(ui->btnClear, &QToolButton::clicked, this, &PipelineListWidget::OnClearClicked);
     connect(ui->btnRun, &QToolButton::clicked, this, &PipelineListWidget::OnRunClicked);
 
     connect(ui->listSteps, &QListWidget::currentRowChanged, this, &PipelineListWidget::OnCurrentRowChanged);
+    connect(ui->listSteps, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        if (!_isUpdatingList && item)
+        {
+            emit StepSelected(ui->listSteps->row(item));
+        }
+    });
+    connect(ui->listSteps, &QListWidget::itemPressed, this, [this](QListWidgetItem* item) {
+        if (!_isUpdatingList && item)
+        {
+            emit StepSelected(ui->listSteps->row(item));
+        }
+    });
     connect(ui->listSteps, &QListWidget::itemChanged, this, &PipelineListWidget::OnItemChanged);
+
+    // 分支 Tab 栏信号连接
+    connect(ui->tabBranches, &QTabBar::currentChanged, this, &PipelineListWidget::OnBranchTabChanged);
+    connect(ui->tabBranches, &QTabBar::tabCloseRequested, this, &PipelineListWidget::OnBranchTabCloseRequested);
 }
 
 PipelineListWidget::~PipelineListWidget()
@@ -72,13 +89,24 @@ void PipelineListWidget::SetPipelineManager(PipelineManager* pipelineMgr)
     if (_pipelineMgr)
     {
         connect(_pipelineMgr, &PipelineManager::PipelineChanged, this, &PipelineListWidget::RefreshList);
+        connect(_pipelineMgr, &PipelineManager::BranchListChanged, this, &PipelineListWidget::RefreshBranchTabs);
+        connect(_pipelineMgr, &PipelineManager::ActiveBranchChanged, this, [this](int idx) {
+            _selectLastStepOnRefresh = true;
+            RefreshBranchTabs();
+            RefreshList();
+            emit BranchSelected(idx);
+        });
         connect(_pipelineMgr, &PipelineManager::ExecutionCompleted, this, [this](double totalMs) {
-            ui->lblStatus->setText(QString("流水线已完成 | 步骤: %1 | 耗时: %2 ms")
+            std::string branchName = _pipelineMgr->GetBranchName(_pipelineMgr->GetActiveBranchIndex());
+            ui->lblStatus->setText(QString("[%1] 已完成 | 步骤: %2 | 耗时: %3 ms")
+                                       .arg(QString::fromStdString(branchName))
                                        .arg(_pipelineMgr->GetStepCount())
                                        .arg(QString::number(totalMs, 'f', 1)));
             RefreshList();
         });
     }
+    _selectLastStepOnRefresh = true;
+    RefreshBranchTabs();
     RefreshList();
 }
 
@@ -94,6 +122,50 @@ void PipelineListWidget::SelectStep(int index)
         ui->listSteps->setCurrentRow(index);
         emit StepSelected(index);
     }
+    else if (index == -1)
+    {
+        ui->listSteps->setCurrentRow(-1);
+        emit StepSelected(-1);
+    }
+}
+
+void PipelineListWidget::RefreshBranchTabs()
+{
+    if (!_pipelineMgr)
+    {
+        while (ui->tabBranches->count() > 0)
+        {
+            ui->tabBranches->removeTab(0);
+        }
+        return;
+    }
+
+    _isUpdatingTabs = true;
+    while (ui->tabBranches->count() > 0)
+    {
+        ui->tabBranches->removeTab(0);
+    }
+
+    int count = _pipelineMgr->GetBranchCount();
+    for (int i = 0; i < count; ++i)
+    {
+        QString tabText = QString::fromStdString(_pipelineMgr->GetBranchName(i));
+        int tabIdx = ui->tabBranches->addTab(tabText);
+
+        // 主流水线 (Tab 0) 不允许关闭
+        if (i == 0)
+        {
+            ui->tabBranches->setTabButton(tabIdx, QTabBar::RightSide, nullptr);
+        }
+    }
+
+    int activeIdx = _pipelineMgr->GetActiveBranchIndex();
+    if (activeIdx >= 0 && activeIdx < ui->tabBranches->count())
+    {
+        ui->tabBranches->setCurrentIndex(activeIdx);
+    }
+
+    _isUpdatingTabs = false;
 }
 
 void PipelineListWidget::RefreshList()
@@ -131,10 +203,29 @@ void PipelineListWidget::RefreshList()
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsSelectable | Qt::ItemIsEnabled);
         item->setCheckState(step->IsEnabled() ? Qt::Checked : Qt::Unchecked);
         item->setData(Qt::UserRole, i);
+
+        // 步骤状态色彩提示 (错误时醒目红，禁用时淡灰，正常时清晰白)
+        if (step->HasError())
+        {
+            item->setForeground(QBrush(QColor(255, 107, 107)));
+        }
+        else if (!step->IsEnabled())
+        {
+            item->setForeground(QBrush(QColor(140, 140, 140)));
+        }
+        else
+        {
+            item->setForeground(QBrush(QColor(230, 230, 230)));
+        }
     }
 
     int targetRow = -1;
-    if (savedRow >= 0 && savedRow < ui->listSteps->count())
+    if (_selectLastStepOnRefresh)
+    {
+        targetRow = ui->listSteps->count() - 1;
+        _selectLastStepOnRefresh = false;
+    }
+    else if (savedRow >= 0 && savedRow < ui->listSteps->count())
     {
         targetRow = savedRow;
     }
@@ -143,77 +234,115 @@ void PipelineListWidget::RefreshList()
         targetRow = ui->listSteps->count() - 1;
     }
 
+    ui->listSteps->setCurrentRow(targetRow);
+    _isUpdatingList = false;
+
+    UpdateToggleAllButtonState();
+
     if (targetRow >= 0)
     {
-        ui->listSteps->setCurrentRow(targetRow);
+        emit StepSelected(targetRow);
     }
     else
     {
-        ui->listSteps->setCurrentRow(-1);
+        emit StepSelected(-1);
+    }
+}
+
+void PipelineListWidget::UpdateToggleAllButtonState()
+{
+    if (!_pipelineMgr || _pipelineMgr->GetStepCount() == 0)
+    {
+        ui->btnToggleAll->setChecked(false);
+        ui->btnToggleAll->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
+        ui->btnToggleAll->setToolTip("一键全选当前分支所有流程");
+        return;
     }
 
-    _isUpdatingList = false;
-    // 列表刷新后同步发射选中事件，确保右侧属性面板和主视口焦点立刻同步切换
-    emit StepSelected(targetRow);
+    bool allEnabled = _pipelineMgr->AreAllStepsEnabled();
+    ui->btnToggleAll->setChecked(allEnabled);
+    if (allEnabled)
+    {
+        ui->btnToggleAll->setIcon(IconUtils::CreateDeselectAllIcon(QColor(230, 80, 80), 32));
+        ui->btnToggleAll->setToolTip("一键取消/禁用当前分支所有流程 (当前已全部启用)");
+    }
+    else
+    {
+        ui->btnToggleAll->setIcon(IconUtils::CreateSelectAllIcon(QColor(76, 175, 80), 32));
+        ui->btnToggleAll->setToolTip("一键全选/启用当前分支所有流程");
+    }
 }
 
 void PipelineListWidget::OnMoveUpClicked()
 {
     int row = ui->listSteps->currentRow();
-    if (_pipelineMgr && row > 0)
+    if (_pipelineMgr && _pipelineMgr->MoveStepUp(row))
     {
-        _pipelineMgr->MoveStepUp(row);
         _pipelineMgr->Execute();
-        SelectStep(row - 1);
+        ui->listSteps->setCurrentRow(row - 1);
     }
 }
 
 void PipelineListWidget::OnMoveDownClicked()
 {
     int row = ui->listSteps->currentRow();
-    if (_pipelineMgr && row >= 0 && row < _pipelineMgr->GetStepCount() - 1)
+    if (_pipelineMgr && _pipelineMgr->MoveStepDown(row))
     {
-        _pipelineMgr->MoveStepDown(row);
         _pipelineMgr->Execute();
-        SelectStep(row + 1);
+        ui->listSteps->setCurrentRow(row + 1);
     }
 }
 
 void PipelineListWidget::OnRemoveClicked()
 {
     int row = ui->listSteps->currentRow();
-    if (_pipelineMgr && row >= 0 && row < _pipelineMgr->GetStepCount())
+    if (_pipelineMgr && _pipelineMgr->RemoveStep(row))
     {
-        _pipelineMgr->RemoveStep(row);
         _pipelineMgr->Execute();
+        int newRow = std::min(row, ui->listSteps->count() - 1);
+        ui->listSteps->setCurrentRow(newRow);
     }
 }
 
-void PipelineListWidget::OnSelectAllClicked()
+void PipelineListWidget::OnToggleAllClicked()
 {
-    if (_pipelineMgr)
+    if (!_pipelineMgr || _pipelineMgr->GetStepCount() == 0)
     {
-        _pipelineMgr->SetAllStepsEnabled(true);
+        return;
     }
+
+    bool allEnabled = _pipelineMgr->AreAllStepsEnabled();
+    // 若当前全部启用，则一键禁用；反之则一键全部启用
+    _pipelineMgr->SetAllStepsEnabled(!allEnabled);
+    UpdateToggleAllButtonState();
 }
 
-void PipelineListWidget::OnDeselectAllClicked()
+void PipelineListWidget::OnCreateBranchClicked()
 {
-    if (_pipelineMgr)
+    if (!_pipelineMgr)
     {
-        _pipelineMgr->SetAllStepsEnabled(false);
+        return;
     }
+
+    int newIdx = _pipelineMgr->CreateBranch();
+    RefreshBranchTabs();
+    emit BranchSelected(newIdx);
+    _pipelineMgr->Execute();
 }
 
 void PipelineListWidget::OnClearClicked()
 {
-    if (_pipelineMgr && _pipelineMgr->GetStepCount() > 0)
+    if (!_pipelineMgr || _pipelineMgr->GetStepCount() == 0)
     {
-        if (QMessageBox::question(this, "确认清空", "是否确定清空当前流水线中所有算子？") == QMessageBox::Yes)
-        {
-            _pipelineMgr->Clear();
-            _pipelineMgr->Execute();
-        }
+        return;
+    }
+
+    auto reply = QMessageBox::question(this, "清空确认", "确定要清空当前流水线分支的所有算子步骤吗？",
+                                       QMessageBox::Yes | QMessageBox::No);
+    if (reply == QMessageBox::Yes)
+    {
+        _pipelineMgr->Clear();
+        _pipelineMgr->Execute();
     }
 }
 
@@ -250,6 +379,39 @@ void PipelineListWidget::OnItemChanged(QListWidgetItem* item)
             step->SetEnabled(enabled);
             _pipelineMgr->MarkDirtyFrom(row);
             _pipelineMgr->Execute();
+            UpdateToggleAllButtonState();
         }
+    }
+}
+
+void PipelineListWidget::OnBranchTabChanged(int index)
+{
+    if (_isUpdatingTabs || !_pipelineMgr || index < 0 || index >= _pipelineMgr->GetBranchCount())
+    {
+        return;
+    }
+
+    _selectLastStepOnRefresh = true;
+    _pipelineMgr->SetActiveBranchIndex(index);
+    emit BranchSelected(index);
+    _pipelineMgr->Execute();
+}
+
+void PipelineListWidget::OnBranchTabCloseRequested(int index)
+{
+    if (!_pipelineMgr || index <= 0)
+    {
+        return; // 主流水线不可删除
+    }
+
+    std::string bName = _pipelineMgr->GetBranchName(index);
+    auto reply = QMessageBox::question(this, "删除分支确认",
+                                       QString("确定要删除分支【%1】及其所有算子流程吗？").arg(QString::fromStdString(bName)),
+                                       QMessageBox::Yes | QMessageBox::No);
+    if (reply == QMessageBox::Yes)
+    {
+        _pipelineMgr->RemoveBranch(index);
+        RefreshBranchTabs();
+        RefreshList();
     }
 }

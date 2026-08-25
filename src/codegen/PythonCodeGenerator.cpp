@@ -26,44 +26,70 @@ std::string PythonCodeGenerator::Generate(const PipelineManager& pipeline, const
        << "    h, w = src.shape[:2]\n"
        << "    print(f\"[Info] 成功加载图像: {w}x{h}, 通道数: {src.shape[2] if len(src.shape) == 3 else 1}\")\n\n"
        << "    # 2. 执行流水线处理并计时\n"
-       << "    start_time = time.perf_counter()\n\n";
+       << "    start_time = time.perf_counter()\n\n"
+       << "    source_image = src.copy()\n\n";
 
-    ss << "    source_image = src.copy()\n\n";
+    int branchCount = pipeline.GetBranchCount();
+    std::string lastOverallVar = "source_image";
 
-    int activeStepCount = 0;
-    for (int i = 0; i < pipeline.GetStepCount(); ++i)
+    for (int b = 0; b < branchCount; ++b)
     {
-        const PipelineStep* step = pipeline.GetStep(i);
-        if (!step || !step->GetOpNode() || !step->IsEnabled())
+        std::string branchName = pipeline.GetBranchName(b);
+        std::string branchVarPrefix = (b == 0) ? "main" : ("branch_" + std::to_string(b));
+        std::string branchSrcVar = (b == 0) ? "src" : (branchVarPrefix + "_src");
+
+        ss << "    # ========================================================================\n"
+           << "    # 分支 " << b << ": " << branchName << "\n"
+           << "    # ========================================================================\n";
+
+        if (b > 0)
         {
-            continue;
+            ss << "    " << branchSrcVar << " = " << lastOverallVar << ".copy()\n";
         }
 
-        activeStepCount++;
-        IOpNode* op = step->GetOpNode();
-        std::string inVar = (activeStepCount == 1) ? "src" : ("step_" + std::to_string(activeStepCount - 1) + "_out");
-        std::string outVar = "step_" + std::to_string(activeStepCount) + "_out";
-
-        ss << "    # --- Step " << activeStepCount << ": " << op->GetDisplayName() << " ---\n";
-
-        std::string codeChunk = op->GeneratePythonCode(inVar, outVar);
-        std::istringstream codeStream(codeChunk);
-        std::string line;
-        while (std::getline(codeStream, line))
+        int activeStepCount = 0;
+        int stepCount = pipeline.GetBranchStepCount(b);
+        for (int i = 0; i < stepCount; ++i)
         {
-            ss << "    " << line << "\n";
+            const PipelineStep* step = pipeline.GetBranchStep(b, i);
+            if (!step || !step->GetOpNode() || !step->IsEnabled())
+            {
+                continue;
+            }
+
+            activeStepCount++;
+            IOpNode* op = step->GetOpNode();
+            std::string inVar = (activeStepCount == 1) ? branchSrcVar : (branchVarPrefix + "_step_" + std::to_string(activeStepCount - 1) + "_out");
+            std::string outVar = branchVarPrefix + "_step_" + std::to_string(activeStepCount) + "_out";
+
+            ss << "    # --- [" << branchName << "] Step " << activeStepCount << ": " << op->GetDisplayName() << " ---\n";
+
+            std::string codeChunk = op->GeneratePythonCode(inVar, outVar);
+            std::istringstream codeStream(codeChunk);
+            std::string line;
+            while (std::getline(codeStream, line))
+            {
+                ss << "    " << line << "\n";
+            }
+            ss << "\n";
         }
-        ss << "\n";
+
+        std::string branchFinalVar = (activeStepCount == 0) ? branchSrcVar : (branchVarPrefix + "_step_" + std::to_string(activeStepCount) + "_out");
+        std::string branchOutVar = (b == 0) ? "main_pipeline_out" : ("branch_" + std::to_string(b) + "_out");
+        ss << "    " << branchOutVar << " = " << branchFinalVar << "\n\n";
+
+        if (b == pipeline.GetActiveBranchIndex() || b == 0)
+        {
+            lastOverallVar = branchOutVar;
+        }
     }
-
-    std::string finalVar = (activeStepCount == 0) ? "src" : ("step_" + std::to_string(activeStepCount) + "_out");
 
     ss << "    elapsed_ms = (time.perf_counter() - start_time) * 1000\n"
        << "    print(f\"[Success] 流水线执行耗时: {elapsed_ms:.2f} ms\")\n\n"
        << "    # 3. 结果显示与存储\n"
        << "    cv2.namedWindow('VisionStudio Output', cv2.WINDOW_NORMAL)\n"
-       << "    cv2.imshow('VisionStudio Output', " << finalVar << ")\n"
-       << "    cv2.imwrite('output_result.jpg', " << finalVar << ")\n"
+       << "    cv2.imshow('VisionStudio Output', " << lastOverallVar << ")\n"
+       << "    cv2.imwrite('output_result.jpg', " << lastOverallVar << ")\n"
        << "    print(\"[Info] 结果已保存至 output_result.jpg，按任意键退出窗口...\")\n"
        << "    cv2.waitKey(0)\n"
        << "    cv2.destroyAllWindows()\n\n\n"
