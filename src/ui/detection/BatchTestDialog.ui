@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>BatchTestDialog</class>
+ <widget class="QDialog" name="BatchTestDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>750</width>
+    <height>550</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>批量测试与质检指标评估</string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <layout class="QHBoxLayout" name="hboxFolder">
+     <item>
+      <widget class="QLabel" name="lblFolder">
+       <property name="text">
+        <string>测试图像文件夹:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="txtFolderPath"/>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnBrowseFolder">
+       <property name="text">
+        <string>浏览...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnStart">
+       <property name="styleSheet">
+        <string notr="true">font-weight: bold; background-color: #2e7d32; color: white;</string>
+       </property>
+       <property name="text">
+        <string>开始批量检测</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnStop">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>停止</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QProgressBar" name="progressBar">
+     <property name="value">
+      <number>0</number>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grpStats">
+     <property name="title">
+      <string>质检指标汇总看板</string>
+     </property>
+     <layout class="QHBoxLayout" name="hboxStats">
+      <item>
+       <widget class="QLabel" name="lblTotal">
+        <property name="text">
+         <string>测试总数: 0</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblPassed">
+        <property name="styleSheet">
+         <string notr="true">color: #4caf50; font-weight: bold;</string>
+        </property>
+        <property name="text">
+         <string>合格 (OK): 0</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblFailed">
+        <property name="styleSheet">
+         <string notr="true">color: #f44336; font-weight: bold;</string>
+        </property>
+        <property name="text">
+         <string>不合格 (NG): 0</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblPassRate">
+        <property name="text">
+         <string>良品率: 0.0%</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblAvgTime">
+        <property name="text">
+         <string>平均耗时: 0.0 ms</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="tableBatch">
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+     <property name="selectionBehavior">
+      <enum>QAbstractItemView::SelectRows</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="hboxBottom">
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnExportCsv">
+       <property name="text">
+        <string>导出 CSV 报告</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnClose">
+       <property name="text">
+        <string>关闭</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

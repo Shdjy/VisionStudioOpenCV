@@ -77,6 +77,21 @@ public:
      */
     void RegisterAllBuiltinOperators();
 
+    /**
+     * @brief 获取指定算子的详细标准元数据 (包含参数约束与类型要求)
+     */
+    OperatorMetadata GetOperatorMetadata(const std::string& name) const;
+
+    /**
+     * @brief 导出所有已注册算子的元数据为 JSON 数组 (供 AI 知识库与外部工具使用)
+     */
+    QJsonArray ExportAllMetadataJson() const;
+
+    /**
+     * @brief 生成供大模型 Prompt 使用的算子清单简要摘要文本
+     */
+    std::string ExportAllMetadataPromptString() const;
+
 private:
     OpRegistry() = default;
     ~OpRegistry() = default;

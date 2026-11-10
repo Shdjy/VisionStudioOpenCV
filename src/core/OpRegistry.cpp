@@ -167,3 +167,76 @@ void OpRegistry::RegisterAllBuiltinOperators()
     Register<HistogramMatchOp>();
     Register<MomentsHuOp>();
 }
+
+OperatorMetadata OpRegistry::GetOperatorMetadata(const std::string& name) const
+{
+    auto it = _creators.find(name);
+    if (it != _creators.end())
+    {
+        auto node = it->second();
+        if (node)
+        {
+            return node->GetMetadata();
+        }
+    }
+    return OperatorMetadata{};
+}
+
+QJsonArray OpRegistry::ExportAllMetadataJson() const
+{
+    QJsonArray array;
+    for (const auto& pair : _creators)
+    {
+        auto node = pair.second();
+        if (node)
+        {
+            array.append(node->GetMetadata().ToJson());
+        }
+    }
+    return array;
+}
+
+std::string OpRegistry::ExportAllMetadataPromptString() const
+{
+    std::string prompt;
+    prompt += "系统可用图像处理算子列表与参数规范:\n";
+    for (const auto& pair : _creators)
+    {
+        auto node = pair.second();
+        if (!node)
+        {
+            continue;
+        }
+
+        OperatorMetadata meta = node->GetMetadata();
+        prompt += "- 算子名: " + meta.Name + " (" + meta.DisplayName + ")\n";
+        prompt += "  分类: " + meta.Category + " | 功能: " + meta.Description + "\n";
+        if (!meta.Parameters.empty())
+        {
+            prompt += "  参数:\n";
+            for (const auto& p : meta.Parameters)
+            {
+                prompt += "    * " + p.Name + " (" + p.DisplayName + ", 类型: " + p.Type;
+                if (p.Type == "int" || p.Type == "double")
+                {
+                    prompt += ", 范围: [" + std::to_string(p.MinValue) + ", " + std::to_string(p.MaxValue) + "]";
+                }
+                else if (p.Type == "enum" && !p.EnumValues.empty())
+                {
+                    prompt += ", 枚举: [";
+                    for (size_t i = 0; i < p.EnumValues.size(); ++i)
+                    {
+                        if (i > 0)
+                        {
+                            prompt += ", ";
+                        }
+                        prompt += std::to_string(i) + ":" + p.EnumValues[i];
+                    }
+                    prompt += "]";
+                }
+                prompt += ", 默认: " + p.DefaultValue + ")\n";
+            }
+        }
+    }
+    return prompt;
+}

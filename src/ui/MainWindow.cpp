@@ -5,6 +5,7 @@
 #include "ui_MainWindow.h"
 #include "AboutDialog.h"
 #include "MaskEditorDialog.h"
+#include "detection/BatchTestDialog.h"
 #include "../core/OpRegistry.h"
 #include "../bll/ProjectManager.h"
 #include "../utils/Logger.h"
@@ -35,7 +36,7 @@ MainWindow::MainWindow(QWidget* parent)
     InitUiAndDocks();
     SetupConnections();
 
-    Logger::Info("MainWindow", "VisionStudio OpenCV 系统初始化完成");
+    Logger::Info("MainWindow", "VisionStudio OpenCV 系统初始化完成 (含通用智能检测与 AI 引擎)");
 
     LoadDefaultTestImage();
 }
@@ -69,7 +70,7 @@ void MainWindow::showEvent(QShowEvent* event)
 
         // 2. 初始比例分配 (VS 风格黄金比例布局，默认底部折叠留出最大视觉视口)
         resizeDocks({ _dockOperators, _dockPipeline }, { 280, 280 }, Qt::Horizontal);
-        resizeDocks({ _dockProperties, _dockHistogram }, { 340, 340 }, Qt::Horizontal);
+        resizeDocks({ _dockProperties, _dockHistogram, _dockDetection, _dockAi }, { 340, 340, 340, 340 }, Qt::Horizontal);
     }
 }
 
@@ -126,7 +127,23 @@ void MainWindow::InitUiAndDocks()
     _dockHistogram->setWidget(_histogramWidget);
     addDockWidget(Qt::RightDockWidgetArea, _dockHistogram);
 
-    // 7. 底部 Dock: 多语言代码生成 (默认隐藏，点击工具栏/菜单时唤出)
+    // 7. 右侧 Dock: 智能检测任务管理 (新)
+    _dockDetection = new QDockWidget("智能检测与质检 (Inspection)", this);
+    _dockDetection->setObjectName("dockDetection");
+    configureDock(_dockDetection);
+    _detectionPanel = new DetectionPanelWidget(&_taskManager, _dockDetection);
+    _dockDetection->setWidget(_detectionPanel);
+    addDockWidget(Qt::RightDockWidgetArea, _dockDetection);
+
+    // 8. 右侧 Dock: AI 智能视觉助手 (新)
+    _dockAi = new QDockWidget("AI 智能视觉助手 (AI Assistant)", this);
+    _dockAi->setObjectName("dockAi");
+    configureDock(_dockAi);
+    _aiAssistant = new AiAssistantWidget(&_pipelineManager, &_taskManager, _dockAi);
+    _dockAi->setWidget(_aiAssistant);
+    addDockWidget(Qt::RightDockWidgetArea, _dockAi);
+
+    // 9. 底部 Dock: 多语言代码生成
     _dockCode = new QDockWidget("多语言代码生成 (Code Generation)", this);
     _dockCode->setObjectName("dockCode");
     configureDock(_dockCode);
@@ -136,7 +153,7 @@ void MainWindow::InitUiAndDocks()
     addDockWidget(Qt::BottomDockWidgetArea, _dockCode);
     _dockCode->hide();
 
-    // 8. 底部 Dock: 运行日志控制台 (默认隐藏，点击工具栏/菜单时唤出)
+    // 10. 底部 Dock: 运行日志控制台
     _dockLog = new QDockWidget("运行日志与控制台 (Log Console)", this);
     _dockLog->setObjectName("dockLog");
     configureDock(_dockLog);
@@ -145,13 +162,15 @@ void MainWindow::InitUiAndDocks()
     addDockWidget(Qt::BottomDockWidgetArea, _dockLog);
     _dockLog->hide();
 
-    // 9. Tab 组合与初始激活
+    // 11. Tab 组合与初始激活
     tabifyDockWidget(_dockProperties, _dockHistogram);
+    tabifyDockWidget(_dockHistogram, _dockDetection);
+    tabifyDockWidget(_dockDetection, _dockAi);
     _dockProperties->raise();
 
     tabifyDockWidget(_dockCode, _dockLog);
 
-    // 10. 设置工具栏与菜单项专属生动图标 (各不相同、绝不重复)
+    // 12. 设置工具栏与菜单项专属图标
     ui->mainToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     ui->mainToolBar->setIconSize(QSize(22, 22));
 
@@ -164,10 +183,11 @@ void MainWindow::InitUiAndDocks()
     ui->actionCreateBranch->setIcon(style()->standardIcon(QStyle::SP_FileDialogNewFolder));
     ui->actionClearPipeline->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
     ui->actionResetLayout->setIcon(style()->standardIcon(QStyle::SP_DesktopIcon));
-    ui->actionAbout->setIcon(QIcon(":/icons/app_icon.png")); // 专属应用 Logo
+    ui->actionAbout->setIcon(QIcon(":/icons/app_icon.png"));
 
-    // 11. 在工具栏增加 🎭 创建交互式掩码 快捷按钮
+    // 13. 工具栏快捷动作扩展
     ui->mainToolBar->addSeparator();
+
     auto* actionCreateMask = new QAction(style()->standardIcon(QStyle::SP_FileDialogListView), "创建/编辑交互式掩码", this);
     actionCreateMask->setToolTip("一键可视化绘制或生成局部掩码 (Alt+M)");
     actionCreateMask->setStatusTip("弹出工作台鼠标拖动选区或根据阈值自动生成局部掩码");
@@ -175,14 +195,42 @@ void MainWindow::InitUiAndDocks()
     connect(actionCreateMask, &QAction::triggered, this, &MainWindow::OnCreateMaskDialog);
     ui->mainToolBar->addAction(actionCreateMask);
 
-    // 12. 在工具栏增加代码生成与日志控制台的 VS 风格唤出图标 (默认未选中，点击唤出)
+    // 智能检测 Dock 快捷唤出
+    auto* actionToggleDetection = new QAction(style()->standardIcon(QStyle::SP_DialogApplyButton), "智能检测与质检面板", this);
+    actionToggleDetection->setCheckable(true);
+    actionToggleDetection->setChecked(true);
+    actionToggleDetection->setToolTip("显示/隐藏 智能检测与质检面板 (Alt+D)");
+    actionToggleDetection->setStatusTip("打开目标计数与工件表面缺陷检测面板");
+    actionToggleDetection->setShortcut(QKeySequence("Alt+D"));
+    connect(actionToggleDetection, &QAction::triggered, this, &MainWindow::OnToggleDetectionDock);
+    connect(_dockDetection, &QDockWidget::visibilityChanged, actionToggleDetection, &QAction::setChecked);
+    ui->mainToolBar->addAction(actionToggleDetection);
+
+    // AI 视觉助手 Dock 快捷唤出
+    auto* actionToggleAi = new QAction(style()->standardIcon(QStyle::SP_ComputerIcon), "AI 视觉助手", this);
+    actionToggleAi->setCheckable(true);
+    actionToggleAi->setChecked(false);
+    actionToggleAi->setToolTip("显示/隐藏 AI 智能视觉助手面板 (Alt+A)");
+    actionToggleAi->setStatusTip("使用大模型自动获取模型并规划检测方案");
+    actionToggleAi->setShortcut(QKeySequence("Alt+A"));
+    connect(actionToggleAi, &QAction::triggered, this, &MainWindow::OnToggleAiDock);
+    connect(_dockAi, &QDockWidget::visibilityChanged, actionToggleAi, &QAction::setChecked);
+    ui->mainToolBar->addAction(actionToggleAi);
+
+    // 批量测试对话框快捷入口
+    auto* actionBatchTest = new QAction(style()->standardIcon(QStyle::SP_FileDialogDetailedView), "批量测试与统计评估", this);
+    actionBatchTest->setToolTip("批量对整个文件夹图像执行检测并统计良品率 (Alt+B)");
+    actionBatchTest->setStatusTip("批量执行质检并导出 CSV 报表");
+    actionBatchTest->setShortcut(QKeySequence("Alt+B"));
+    connect(actionBatchTest, &QAction::triggered, this, &MainWindow::OnShowBatchTestDialog);
+    ui->mainToolBar->addAction(actionBatchTest);
+
     ui->mainToolBar->addSeparator();
 
     auto* actionToggleCode = new QAction(style()->standardIcon(QStyle::SP_FileDialogContentsView), "代码生成面板", this);
     actionToggleCode->setCheckable(true);
     actionToggleCode->setChecked(false);
     actionToggleCode->setToolTip("显示/隐藏 底部代码生成面板 (Alt+C)");
-    actionToggleCode->setStatusTip("快速展开或折叠底部多语言代码生成视口");
     actionToggleCode->setShortcut(QKeySequence("Alt+C"));
     connect(actionToggleCode, &QAction::triggered, this, &MainWindow::OnToggleCodeDock);
     connect(_dockCode, &QDockWidget::visibilityChanged, actionToggleCode, &QAction::setChecked);
@@ -192,23 +240,25 @@ void MainWindow::InitUiAndDocks()
     actionToggleLog->setCheckable(true);
     actionToggleLog->setChecked(false);
     actionToggleLog->setToolTip("显示/隐藏 底部运行日志控制台 (Alt+L)");
-    actionToggleLog->setStatusTip("快速展开或折叠底部运行日志视口");
     actionToggleLog->setShortcut(QKeySequence("Alt+L"));
     connect(actionToggleLog, &QAction::triggered, this, &MainWindow::OnToggleLogDock);
     connect(_dockLog, &QDockWidget::visibilityChanged, actionToggleLog, &QAction::setChecked);
     ui->mainToolBar->addAction(actionToggleLog);
 
-    // 13. 视图菜单补充 Dock 控制
+    // 14. 视图菜单补充 Dock 控制
     ui->menuView->addAction(_dockOperators->toggleViewAction());
     ui->menuView->addAction(_dockPipeline->toggleViewAction());
     ui->menuView->addAction(_dockProperties->toggleViewAction());
     ui->menuView->addAction(_dockHistogram->toggleViewAction());
+    ui->menuView->addAction(_dockDetection->toggleViewAction());
+    ui->menuView->addAction(_dockAi->toggleViewAction());
     ui->menuView->addSeparator();
     ui->menuView->addAction(actionCreateMask);
+    ui->menuView->addAction(actionBatchTest);
     ui->menuView->addAction(actionToggleCode);
     ui->menuView->addAction(actionToggleLog);
 
-    // 14. 状态栏
+    // 15. 状态栏
     _lblStatusInfo = new QLabel("就绪", this);
     _lblPipelineTime = new QLabel("流水线耗时: 0.0 ms", this);
     _lblImageDim = new QLabel("图像: 未加载", this);
@@ -286,6 +336,61 @@ void MainWindow::OnToggleLogDock()
     }
 }
 
+void MainWindow::OnToggleDetectionDock()
+{
+    if (_dockDetection->isHidden())
+    {
+        _dockDetection->show();
+        _dockDetection->raise();
+    }
+    else
+    {
+        if (_dockDetection->visibleRegion().isEmpty())
+        {
+            _dockDetection->raise();
+        }
+        else
+        {
+            _dockDetection->hide();
+        }
+    }
+}
+
+void MainWindow::OnToggleAiDock()
+{
+    if (_dockAi->isHidden())
+    {
+        _dockAi->show();
+        _dockAi->raise();
+    }
+    else
+    {
+        if (_dockAi->visibleRegion().isEmpty())
+        {
+            _dockAi->raise();
+        }
+        else
+        {
+            _dockAi->hide();
+        }
+    }
+}
+
+void MainWindow::OnShowBatchTestDialog()
+{
+    BatchTestDialog dlg(&_taskManager, this);
+    dlg.exec();
+}
+
+void MainWindow::OnDetectionResultRendered(const cv::Mat& visualization)
+{
+    if (!visualization.empty())
+    {
+        _imageViewer->SetImage(visualization, _pipelineManager.GetSourceImage());
+        Logger::Info("MainWindow", "主视口已更新为智能检测判定叠加图");
+    }
+}
+
 void MainWindow::SetupConnections()
 {
     // 菜单与工具栏
@@ -320,6 +425,20 @@ void MainWindow::SetupConnections()
     });
     connect(&_pipelineManager, &PipelineManager::ExecutionCompleted, this, &MainWindow::OnPipelineExecutionCompleted);
 
+    // 检测面板与 AI 助手联动
+    connect(_detectionPanel, &DetectionPanelWidget::DetectionExecuted, this, &MainWindow::OnDetectionResultRendered);
+    connect(_detectionPanel, &DetectionPanelWidget::BatchTestRequested, this, &MainWindow::OnShowBatchTestDialog);
+
+    connect(_aiAssistant, &AiAssistantWidget::DetectionTaskApplied, this, [this]() {
+        _dockDetection->show();
+        _dockDetection->raise();
+    });
+    connect(_aiAssistant, &AiAssistantWidget::PipelineStepsApplied, this, [this]() {
+        _dockPipeline->show();
+        _dockPipeline->raise();
+        _pipelineManager.Execute();
+    });
+
     // 视口与直方图/剖面联动
     connect(_imageViewer, &ImageViewer::ImageUpdated, _histogramWidget, &HistogramWidget::UpdateHistogram);
     connect(_imageViewer, &ImageViewer::LineProfileUpdated, _histogramWidget, &HistogramWidget::UpdateLineProfile);
@@ -327,7 +446,7 @@ void MainWindow::SetupConnections()
 
 void MainWindow::LoadDefaultTestImage()
 {
-    // 生成一张包含几何形状、渐变与文字的高分辨率演示图
+    // 生成一张包含几何形状、渐变与模拟工件的高分辨率演示图
     cv::Mat defaultImg(600, 800, CV_8UC3, cv::Scalar(40, 40, 40));
 
     // 渐变底纹
@@ -341,7 +460,7 @@ void MainWindow::LoadDefaultTestImage()
         }
     }
 
-    // 几何图形
+    // 几何零件 (用于目标计数与形状分析测试)
     cv::rectangle(defaultImg, cv::Rect(50, 60, 200, 150), cv::Scalar(0, 165, 255), -1); // 橙色矩形
     cv::circle(defaultImg, cv::Point(400, 135), 75, cv::Scalar(0, 255, 128), -1);         // 绿色圆形
     cv::circle(defaultImg, cv::Point(650, 135), 70, cv::Scalar(255, 100, 0), 4);          // 蓝色圆环
@@ -350,31 +469,40 @@ void MainWindow::LoadDefaultTestImage()
     std::vector<cv::Point> pts = { cv::Point(150, 480), cv::Point(80, 360), cv::Point(220, 360) };
     cv::fillPoly(defaultImg, pts, cv::Scalar(255, 255, 0));
 
-    // 棋盘格与网格
-    for (int i = 0; i < 4; ++i)
+    // 模拟 12 个瓶盖/圆形工件排列阵列 (便于开箱即测目标计数)
+    for (int row = 0; row < 3; ++row)
     {
-        for (int j = 0; j < 4; ++j)
+        for (int col = 0; col < 4; ++col)
         {
-            if ((i + j) % 2 == 0)
-            {
-                cv::rectangle(defaultImg, cv::Rect(320 + i * 35, 320 + j * 35, 35, 35), cv::Scalar(220, 220, 220), -1);
-            }
+            cv::Point pt(340 + col * 75, 340 + row * 65);
+            cv::circle(defaultImg, pt, 24, cv::Scalar(230, 230, 230), -1);
+            cv::circle(defaultImg, pt, 20, cv::Scalar(180, 180, 180), -1);
+            cv::circle(defaultImg, pt, 12, cv::Scalar(120, 120, 120), -1);
         }
     }
 
     // 标定十字与线条
-    cv::line(defaultImg, cv::Point(550, 350), cv::Point(750, 350), cv::Scalar(0, 0, 255), 2);
-    cv::line(defaultImg, cv::Point(650, 250), cv::Point(650, 450), cv::Scalar(0, 0, 255), 2);
-    cv::line(defaultImg, cv::Point(570, 270), cv::Point(730, 430), cv::Scalar(255, 0, 255), 2);
+    cv::line(defaultImg, cv::Point(670, 310), cv::Point(780, 310), cv::Scalar(0, 0, 255), 2);
+    cv::line(defaultImg, cv::Point(725, 260), cv::Point(725, 370), cv::Scalar(0, 0, 255), 2);
 
     // 文字
-    cv::putText(defaultImg, "VisionStudio OpenCV Test Target", cv::Point(50, 560), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255, 255, 255), 2);
+    cv::putText(defaultImg, "VisionStudio OpenCV Industrial Test Target", cv::Point(40, 565),
+                cv::FONT_HERSHEY_SIMPLEX, 0.75, cv::Scalar(255, 255, 255), 2);
 
     _pipelineManager.SetSourceImage(defaultImg);
     _imageViewer->SetImage(defaultImg, defaultImg);
 
-    _lblImageDim->setText(QString("图像: %1x%2 (内置测试靶标)").arg(defaultImg.cols).arg(defaultImg.rows));
-    Logger::Info("MainWindow", "已自动加载内置演示标定靶标图像");
+    if (_detectionPanel)
+    {
+        _detectionPanel->SetSourceImage(defaultImg);
+    }
+    if (_aiAssistant)
+    {
+        _aiAssistant->SetCurrentSourceImage(defaultImg);
+    }
+
+    _lblImageDim->setText(QString("图像: %1x%2 (内置工业测试靶标)").arg(defaultImg.cols).arg(defaultImg.rows));
+    Logger::Info("MainWindow", "已自动加载内置工业测试靶标 (含 12 个排列工件)");
 }
 
 void MainWindow::OnOpenImage()
@@ -400,6 +528,15 @@ void MainWindow::OnOpenImage()
     _pipelineManager.SetSourceImage(img);
     _imageViewer->SetImage(img, img);
     _lblImageDim->setText(QString("图像: %1x%2").arg(img.cols).arg(img.rows));
+
+    if (_detectionPanel)
+    {
+        _detectionPanel->SetSourceImage(img);
+    }
+    if (_aiAssistant)
+    {
+        _aiAssistant->SetCurrentSourceImage(img);
+    }
 
     Logger::Info("MainWindow", "成功打开图像: " + filePath.toStdString());
 
@@ -449,9 +586,9 @@ void MainWindow::OnImportProject()
     AppSettings::SetLastDirectory(AppSettings::KeyProjectDir, filePath);
 
     QString err;
-    if (ProjectManager::LoadProject(_pipelineManager, filePath, err))
+    if (ProjectManager::LoadProject(_pipelineManager, &_taskManager, filePath, err))
     {
-        QMessageBox::information(this, "导入成功", "工程配置已成功加载！");
+        QMessageBox::information(this, "导入成功", "工程配置已成功加载 (含流水线与检测任务)！");
         Logger::Info("MainWindow", "已导入工程配置: " + filePath.toStdString());
     }
     else
@@ -463,9 +600,9 @@ void MainWindow::OnImportProject()
 
 void MainWindow::OnExportProject()
 {
-    if (_pipelineManager.GetStepCount() == 0)
+    if (_pipelineManager.GetStepCount() == 0 && _taskManager.GetTaskCount() == 0)
     {
-        QMessageBox::warning(this, "提示", "当前流水线为空，无法导出工程配置！");
+        QMessageBox::warning(this, "提示", "当前流水线与检测任务均为空，无法导出工程配置！");
         return;
     }
 
@@ -479,7 +616,7 @@ void MainWindow::OnExportProject()
     AppSettings::SetLastDirectory(AppSettings::KeyProjectDir, filePath);
 
     QString err;
-    if (ProjectManager::SaveProject(_pipelineManager, filePath, err))
+    if (ProjectManager::SaveProject(_pipelineManager, &_taskManager, filePath, err))
     {
         QMessageBox::information(this, "导出成功", "工程配置已保存至:\n" + filePath);
         Logger::Info("MainWindow", "已导出工程配置: " + filePath.toStdString());
@@ -514,11 +651,13 @@ void MainWindow::OnResetLayout()
     _dockPipeline->show();
     _dockProperties->show();
     _dockHistogram->show();
+    _dockDetection->show();
+    _dockAi->show();
     _dockCode->show();
     _dockLog->show();
 
     resizeDocks({ _dockOperators, _dockPipeline }, { 280, 280 }, Qt::Horizontal);
-    resizeDocks({ _dockProperties, _dockHistogram }, { 340, 340 }, Qt::Horizontal);
+    resizeDocks({ _dockProperties, _dockHistogram, _dockDetection, _dockAi }, { 340, 340, 340, 340 }, Qt::Horizontal);
     resizeDocks({ _dockCode, _dockLog }, { 220, 220 }, Qt::Vertical);
 }
 
@@ -531,7 +670,7 @@ void MainWindow::OnOperatorAddRequested(const QString& opName)
         int stepIdx = _pipelineManager.AddStep(std::move(op));
         _pipelineManager.Execute();
         _pipelineList->SelectStep(stepIdx);
-        _propertyPanel->SetCurrentStep(stepIdx); // 显式激活参数编辑模式
+        _propertyPanel->SetCurrentStep(stepIdx);
         Logger::Info("MainWindow", "流水线添加算子: " + dispName);
     }
 }

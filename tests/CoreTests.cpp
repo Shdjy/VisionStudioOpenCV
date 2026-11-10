@@ -13,7 +13,24 @@
 #include "utils/ImageIoUtils.h"
 #include "utils/MatUtils.h"
 #include "utils/AppSettings.h"
+#include "core/OperatorMetadata.h"
+#include "bll/PipelineValidator.h"
+#include "detection/DetectionTask.h"
+#include "detection/InspectionRuleEngine.h"
+#include "detection/ObjectCounter.h"
+#include "detection/DefectDetector.h"
+#include "detection/GeometryMeasurement.h"
+#include "detection/DetectionExecutor.h"
+#include "detection/DetectionTaskManager.h"
+#include "ai/IAiProvider.h"
+#include "ai/OpenAiCompatibleProvider.h"
+#include "ai/AiConfigManager.h"
+#include "ai/OperatorKnowledgeBase.h"
+#include "ai/AiResponseValidator.h"
+#include "ai/AiDetectionPlanner.h"
 #include <QCoreApplication>
+#include <QEventLoop>
+#include <QTimer>
 #include <QFile>
 #include <QTemporaryDir>
 #include <algorithm>
@@ -475,6 +492,283 @@ void TestBranchPipelineAndDualImageArithmetic()
     Require(pyCode.find("branch_1") != std::string::npos, "Python code missing branch_1");
     Require(pyCode.find("main_pipeline_out") != std::string::npos, "Python code missing main_pipeline_out");
 }
+
+void TestOperatorMetadataAndValidation()
+{
+    OperatorMetadata meta = OpRegistry::Instance().GetOperatorMetadata("GaussianBlur");
+    Require(!meta.Name.empty(), "expected GaussianBlur metadata");
+    Require(meta.SupportsMultiThread, "expected multi-thread support flag");
+    Require(!meta.Parameters.empty(), "expected GaussianBlur parameters");
+
+    QJsonArray metaJson = OpRegistry::Instance().ExportAllMetadataJson();
+    Require(metaJson.size() >= 60, "expected at least 60 exported operator metadata items");
+
+    // 校验合法流水线
+    PipelineManager pipeline;
+    auto cvt = OpRegistry::Instance().Create("CvtColor");
+    auto blur = OpRegistry::Instance().Create("GaussianBlur");
+    auto canny = OpRegistry::Instance().Create("Canny");
+    pipeline.AddStep(std::move(cvt));
+    pipeline.AddStep(std::move(blur));
+    pipeline.AddStep(std::move(canny));
+
+    cv::Mat colorImg(100, 100, CV_8UC3, cv::Scalar(128, 128, 128));
+    auto report = PipelineValidator::Validate(pipeline, colorImg);
+    Require(report.IsValid, "expected valid pipeline report");
+
+    // 校验偶数核大小等参数违背
+    PipelineManager invalidPipeline;
+    auto badBlur = OpRegistry::Instance().Create("GaussianBlur");
+    auto* param = badBlur->FindParameter("ksize");
+    if (param)
+    {
+        param->Value = 4; // 偶数核大小非法
+    }
+    invalidPipeline.AddStep(std::move(badBlur));
+    auto badReport = PipelineValidator::Validate(invalidPipeline, colorImg);
+    Require(!badReport.IsValid, "expected invalid pipeline report for even kernel size");
+    Require(badReport.ErrorCount > 0, "expected error count > 0");
+}
+
+void TestObjectCounter()
+{
+    // 生成 12 个独立瓶盖/零件靶标演示图
+    cv::Mat img(400, 500, CV_8UC3, cv::Scalar(20, 20, 20));
+    for (int r = 0; r < 3; ++r)
+    {
+        for (int c = 0; c < 4; ++c)
+        {
+            cv::Point center(60 + c * 110, 60 + r * 110);
+            cv::circle(img, center, 32, cv::Scalar(240, 240, 240), -1);
+            cv::circle(img, center, 20, cv::Scalar(160, 160, 160), -1);
+        }
+    }
+
+    ObjectCountConfig cfg;
+    cfg.Method = "ConnectedComponents";
+    cfg.ThresholdMethod = "Otsu";
+    cfg.MinArea = 50.0;
+    cfg.MaxArea = 500000.0;
+    cfg.TargetClass = "bottle_cap";
+
+    DetectionResult result;
+    std::string err;
+    Require(ObjectCounter::Execute(img, cfg, result, err), "ObjectCounter failed: " + err);
+    Require(result.ObjectCount == 12, "expected exactly 12 detected objects, got: " + std::to_string(result.ObjectCount));
+    Require(result.Objects.size() == 12, "objects vector size mismatch");
+    Require(!result.Visualization.empty(), "expected non-empty visualization");
+
+    // 规则评估: expectedCount == 12 -> PASS
+    QJsonArray passRules;
+    QJsonObject r1;
+    r1["name"] = "满数12个检验";
+    r1["ruleType"] = "count";
+    r1["operator"] = "==";
+    r1["expectedCount"] = 12;
+    passRules.append(r1);
+
+    InspectionDecision passDecision = InspectionRuleEngine::Evaluate(result, passRules);
+    Require(passDecision.IsOK(), "expected inspection pass for 12 objects");
+    Require(passDecision.Status == InspectionStatus::Pass, "status should be Pass");
+
+    // 规则评估: expectedCount == 10 -> FAIL / NG
+    QJsonArray failRules;
+    QJsonObject r2;
+    r2["name"] = "满数10个检验";
+    r2["ruleType"] = "count";
+    r2["operator"] = "==";
+    r2["expectedCount"] = 10;
+    failRules.append(r2);
+
+    InspectionDecision failDecision = InspectionRuleEngine::Evaluate(result, failRules);
+    Require(!failDecision.IsOK(), "expected inspection fail for mismatching count");
+    Require(failDecision.Status == InspectionStatus::Fail, "status should be Fail");
+    Require(!failDecision.Reasons.empty(), "reasons should not be empty");
+}
+
+void TestDefectDetector()
+{
+    // 生成金属工件表面与缺陷模拟图 (底色灰度 140)
+    // 包含 1 处长划痕与 2 处凹坑
+    cv::Mat workpiece(300, 400, CV_8UC3, cv::Scalar(140, 140, 140));
+    // 细长暗色划痕
+    cv::line(workpiece, cv::Point(50, 50), cv::Point(180, 70), cv::Scalar(30, 30, 30), 2);
+    // 暗色凹坑
+    cv::circle(workpiece, cv::Point(280, 120), 8, cv::Scalar(25, 25, 25), -1);
+    // 亮色凹坑/反光点
+    cv::circle(workpiece, cv::Point(150, 220), 7, cv::Scalar(250, 250, 250), -1);
+
+    DefectDetectConfig cfg;
+    cfg.Method = "BackgroundSubtraction";
+    cfg.BackgroundBlurKernel = 31;
+    cfg.DiffThreshold = 25;
+    cfg.MinDefectArea = 10.0;
+    cfg.MinDefectLength = 4.0;
+
+    DetectionResult result;
+    std::string err;
+    Require(DefectDetector::Execute(workpiece, cfg, result, err), "DefectDetector failed: " + err);
+    Require(result.DefectCount >= 3, "expected at least 3 defects found, got: " + std::to_string(result.DefectCount));
+
+    bool foundScratch = false;
+    bool foundPit = false;
+    for (const auto& d : result.Defects)
+    {
+        if (d.DefectType == "scratch")
+        {
+            foundScratch = true;
+        }
+        else if (d.DefectType == "pit")
+        {
+            foundPit = true;
+        }
+    }
+    Require(foundScratch, "expected scratch defect to be identified");
+    Require(foundPit, "expected pit defect to be identified");
+
+    // 业务规则判定: 零划痕限制
+    QJsonArray rules;
+    QJsonObject r1;
+    r1["name"] = "零划痕限制";
+    r1["ruleType"] = "defect";
+    r1["defectClass"] = "scratch";
+    r1["maxCount"] = 0;
+    rules.append(r1);
+
+    InspectionDecision decision = InspectionRuleEngine::Evaluate(result, rules);
+    Require(!decision.IsOK(), "expected fail on scratch detected");
+    Require(decision.Status == InspectionStatus::Fail, "decision status should be Fail");
+}
+
+void TestGeometryMeasurement()
+{
+    cv::Mat canvas(300, 300, CV_8UC3, cv::Scalar(0, 0, 0));
+    // 绘制清晰实心白色圆 (半径 40，直径 80)
+    cv::circle(canvas, cv::Point(150, 150), 40, cv::Scalar(255, 255, 255), -1);
+
+    MeasurementConfig cfg;
+    cfg.Mode = "FindCircles";
+    cfg.MinRadius = 20.0;
+    cfg.MaxRadius = 60.0;
+    cfg.PixelToMmRatio = 0.5; // 0.5 mm/px -> 直径 80 px = 40 mm
+
+    DetectionResult result;
+    std::string err;
+    Require(GeometryMeasurement::Execute(canvas, cfg, result, err), "GeometryMeasurement failed: " + err);
+    Require(result.Measurements.contains("Circle_1"), "expected Circle_1 in measurements");
+    double dMm = result.Measurements["Circle_1"].toObject()["diameterMm"].toDouble();
+    Require(std::abs(dMm - 40.0) < 5.0, "circle diameter measurement out of range");
+}
+
+void TestProjectManagerV2WithTasks()
+{
+    cv::Mat dummy(100, 100, CV_8UC3, cv::Scalar(100, 100, 100));
+    PipelineManager pipeline;
+    pipeline.SetSourceImage(dummy);
+    pipeline.AddStep(OpRegistry::Instance().Create("GaussianBlur"));
+
+    DetectionTaskManager taskManager;
+    taskManager.Clear();
+    taskManager.AddTask(DetectionTaskManager::CreateDefaultCountTask(24));
+    taskManager.AddTask(DetectionTaskManager::CreateDefaultDefectTask());
+
+    QTemporaryDir tempDir;
+    QString projPath = tempDir.filePath("v2_project.json");
+    QString saveErr;
+    Require(ProjectManager::SaveProject(pipeline, &taskManager, projPath, saveErr), "SaveProject V2 failed: " + saveErr.toStdString());
+
+    PipelineManager reloadedPipeline;
+    DetectionTaskManager reloadedTaskManager;
+    reloadedTaskManager.Clear();
+    QString loadErr;
+    Require(ProjectManager::LoadProject(reloadedPipeline, &reloadedTaskManager, projPath, loadErr), "LoadProject V2 failed: " + loadErr.toStdString());
+    Require(reloadedTaskManager.GetTaskCount() == 2, "expected 2 loaded detection tasks");
+    Require(reloadedTaskManager.GetTask(0)->Type == DetectionTaskType::ObjectCounting, "task 0 should be ObjectCounting");
+    Require(reloadedTaskManager.GetTask(1)->Type == DetectionTaskType::DefectDetection, "task 1 should be DefectDetection");
+}
+
+void TestAiResponseValidator()
+{
+    // 1. 验证目标计数任务 JSON 解析与参数自愈
+    QString validAiCountingJson = R"(
+    Here is the recommended configuration:
+    ```json
+    {
+      "taskType": "ObjectCounting",
+      "name": "药片计数检测",
+      "configuration": {
+        "method": "ConnectedComponents",
+        "thresholdMethod": "Otsu",
+        "morphKernelSize": 4,
+        "minArea": 30.0
+      },
+      "rules": [
+        {
+          "name": "数量要求24个",
+          "ruleType": "count",
+          "operator": "==",
+          "expectedCount": 24
+        }
+      ]
+    }
+    ```
+    )";
+
+    ValidatedAiPlan plan = AiResponseValidator::ValidateAndParse(validAiCountingJson);
+    Require(plan.IsValid, "expected valid AI plan");
+    Require(plan.HasDetectionTask, "expected detection task");
+    Require(plan.Task.Name == "药片计数检测", "task name mismatch");
+    Require(plan.Task.Configuration["morphKernelSize"].toInt() == 5, "kernel size should be adjusted to odd");
+
+    // 2. 验证未知算子拦截
+    QString hallucinatedPipeline = R"(
+    ```json
+    {
+      "pipeline": [
+        {"name": "NonExistentSuperAiFilter", "parameters": {}}
+      ]
+    }
+    ```
+    )";
+    ValidatedAiPlan badPlan = AiResponseValidator::ValidateAndParse(hallucinatedPipeline);
+    Require(!badPlan.IsValid, "hallucinated operator should be rejected");
+}
+
+void TestLiveAiProviderAndModelsFetch()
+{
+    QString baseUrl = "https://api.tokenskingdom.com/v1";
+    QString apiKey = "sk-ec53d4c931f986190063a14a5ab287bfa443971621ce97f52d4622c951811ffb";
+
+    OpenAiCompatibleProvider provider(baseUrl, apiKey);
+
+    QEventLoop loop;
+    bool reqSuccess = false;
+    QStringList modelsList;
+    QString reqError;
+
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+    provider.FetchModelsAsync([&](bool success, const QStringList& models, const QString& error) {
+        reqSuccess = success;
+        modelsList = models;
+        reqError = error;
+        loop.quit();
+    });
+
+    timer.start(15000);
+    loop.exec();
+
+    Require(reqSuccess, "Live API model fetch failed: " + reqError.toStdString());
+    Require(!modelsList.isEmpty(), "models list should not be empty");
+    std::cout << "Live AI models auto-fetched (" << modelsList.size() << " models available): ";
+    for (int i = 0; i < std::min(5, (int)modelsList.size()); ++i)
+    {
+        std::cout << modelsList[i].toStdString() << " ";
+    }
+    std::cout << std::endl;
+}
 }
 
 int main(int argc, char* argv[])
@@ -495,6 +789,13 @@ int main(int argc, char* argv[])
         TestPipelineBulkEnableDisable();
         TestInteractiveMaskMultipleShapes();
         TestBranchPipelineAndDualImageArithmetic();
+        TestOperatorMetadataAndValidation();
+        TestObjectCounter();
+        TestDefectDetector();
+        TestGeometryMeasurement();
+        TestProjectManagerV2WithTasks();
+        TestAiResponseValidator();
+        TestLiveAiProviderAndModelsFetch();
         std::cout << "All VisionStudio core tests passed." << std::endl;
         return 0;
     }

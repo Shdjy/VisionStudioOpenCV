@@ -598,6 +598,54 @@ bool PipelineManager::Execute(bool forceAll)
     auto totalEnd = std::chrono::high_resolution_clock::now();
     _totalTimeMs = std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
 
+    // 记录最新执行统计汇总
+    _lastExecutionSummary = PipelineExecutionSummary{};
+    _lastExecutionSummary.Success = allOk;
+    _lastExecutionSummary.TotalDurationMs = _totalTimeMs;
+
+    if (_activeBranchIndex >= 0 && _activeBranchIndex < static_cast<int>(_branches.size()))
+    {
+        const auto& activeSteps = _branches[_activeBranchIndex].Steps;
+        _lastExecutionSummary.TotalSteps = static_cast<int>(activeSteps.size());
+        for (size_t i = 0; i < activeSteps.size(); ++i)
+        {
+            const auto& s = activeSteps[i];
+            StepExecutionMetric metric;
+            metric.StepIndex = static_cast<int>(i);
+            if (s->GetOpNode())
+            {
+                metric.OperatorName = s->GetOpNode()->GetName();
+                metric.OperatorDisplayName = s->GetOpNode()->GetDisplayName();
+            }
+            metric.DurationMs = s->GetExecutionTimeMs();
+            metric.Success = !s->HasError();
+            metric.ErrorMessage = s->GetErrorMessage();
+            const cv::Mat& cache = s->GetOutputCache();
+            if (!cache.empty())
+            {
+                metric.OutputSize = cache.size();
+                metric.OutputChannels = cache.channels();
+            }
+
+            if (!s->IsEnabled())
+            {
+                _lastExecutionSummary.SkippedSteps++;
+            }
+            else
+            {
+                _lastExecutionSummary.ExecutedSteps++;
+            }
+
+            if (s->HasError() && _lastExecutionSummary.FailedStepIndex == -1)
+            {
+                _lastExecutionSummary.FailedStepIndex = static_cast<int>(i);
+                _lastExecutionSummary.ErrorMessage = s->GetErrorMessage();
+            }
+
+            _lastExecutionSummary.StepMetrics.push_back(metric);
+        }
+    }
+
     emit ExecutionCompleted(_totalTimeMs);
     return allOk;
 }

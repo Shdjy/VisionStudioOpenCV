@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PipelineStep.h"
+#include "PipelineExecutionResult.h"
 #include <vector>
 #include <memory>
 #include <string>
@@ -89,6 +90,7 @@ public:
     const cv::Mat& GetFinalOutput() const;
     const cv::Mat& GetStepOutput(int index) const;
     double GetTotalTimeMs() const { return _totalTimeMs; }
+    const PipelineExecutionSummary& GetLastExecutionSummary() const { return _lastExecutionSummary; }
 
     // 跨分支获取指定分支的步骤
     int GetBranchStepCount(int branchIndex) const;
@@ -108,6 +110,7 @@ private:
     int _activeBranchIndex = 0;
     cv::Mat _emptyMat;
     double _totalTimeMs = 0.0;
+    PipelineExecutionSummary _lastExecutionSummary;
 
     void EnsureDefaultBranch();
     void InvalidateCrossBranchDependents();

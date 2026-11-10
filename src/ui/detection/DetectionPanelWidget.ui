@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DetectionPanelWidget</class>
+ <widget class="QWidget" name="DetectionPanelWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>6</number>
+   </property>
+   <property name="topMargin">
+    <number>6</number>
+   </property>
+   <property name="rightMargin">
+    <number>6</number>
+   </property>
+   <property name="bottomMargin">
+    <number>6</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="grpTaskSelect">
+     <property name="title">
+      <string>检测任务管理</string>
+     </property>
+     <layout class="QVBoxLayout" name="vboxTaskSelect">
+      <item>
+       <layout class="QHBoxLayout" name="hboxTaskSelect">
+        <item>
+         <widget class="QComboBox" name="cbTasks">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnDeleteTask">
+          <property name="text">
+           <string>删除</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="hboxNewTasks">
+        <item>
+         <widget class="QPushButton" name="btnNewCountTask">
+          <property name="text">
+           <string>+ 目标计数任务</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnNewDefectTask">
+          <property name="text">
+           <string>+ 缺陷检测任务</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grpParams">
+     <property name="title">
+      <string>核心检测参数与判定规则</string>
+     </property>
+     <layout class="QFormLayout" name="formParams">
+      <item row="0" column="0">
+       <widget class="QLabel" name="lblParam1">
+        <property name="text">
+         <string>阈值分割方式:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="cbThreshMethod">
+        <item>
+         <property name="text">
+          <string>Otsu 自动阈值</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Adaptive 自适应</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Manual 固定阈值</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="lblParam2">
+        <property name="text">
+         <string>灵敏度/阈值:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSpinBox" name="sbThreshold">
+        <property name="maximum">
+         <number>255</number>
+        </property>
+        <property name="value">
+         <number>128</number>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="lblParam3">
+        <property name="text">
+         <string>最小有效面积 (px):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="sbMinArea">
+        <property name="maximum">
+         <double>999999.0</double>
+        </property>
+        <property name="value">
+         <double>30.0</double>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="lblParam4">
+        <property name="text">
+         <string>期望合格数量 (目标计数):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QSpinBox" name="sbExpectedCount">
+        <property name="maximum">
+         <number>9999</number>
+        </property>
+        <property name="value">
+         <number>12</number>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="lblParam5">
+        <property name="text">
+         <string>最大允许缺陷数:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QSpinBox" name="sbMaxDefects">
+        <property name="maximum">
+         <number>999</number>
+        </property>
+        <property name="value">
+         <number>0</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="hboxActions">
+     <item>
+      <widget class="QPushButton" name="btnRun">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>34</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-weight: bold; background-color: #2e7d32; color: white;</string>
+       </property>
+       <property name="text">
+        <string>▶ 执行当前检测</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnBatchTest">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>34</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>批量测试多图...</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grpVerdict">
+     <property name="title">
+      <string>综合质量判定结论</string>
+     </property>
+     <layout class="QVBoxLayout" name="vboxVerdict">
+      <item>
+       <widget class="QLabel" name="lblVerdict">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>40</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">font-size: 16px; font-weight: bold; padding: 6px; border-radius: 4px; background-color: #333333; color: #cccccc;</string>
+        </property>
+        <property name="text">
+         <string>待检测</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblVerdictReasons">
+        <property name="text">
+         <string>请点击“执行当前检测”启动算法</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="tableResults">
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+     <property name="selectionBehavior">
+      <enum>QAbstractItemView::SelectRows</enum>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

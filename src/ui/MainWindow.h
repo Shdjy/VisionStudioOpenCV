@@ -3,7 +3,9 @@
 #include <QMainWindow>
 #include <QDockWidget>
 #include <QLabel>
+#include <opencv2/opencv.hpp>
 #include "../bll/PipelineManager.h"
+#include "../detection/DetectionTaskManager.h"
 #include "ImageViewer.h"
 #include "OperatorTreeWidget.h"
 #include "PipelineListWidget.h"
@@ -11,6 +13,8 @@
 #include "CodePreviewWidget.h"
 #include "LogPanelWidget.h"
 #include "HistogramWidget.h"
+#include "detection/DetectionPanelWidget.h"
+#include "ai/AiAssistantWidget.h"
 
 namespace Ui {
 class MainWindow;
@@ -39,17 +43,22 @@ private slots:
 
     void OnToggleCodeDock();
     void OnToggleLogDock();
+    void OnToggleDetectionDock();
+    void OnToggleAiDock();
+    void OnShowBatchTestDialog();
 
     void OnOperatorAddRequested(const QString& opName);
     void OnStepSelected(int index);
     void OnPipelineExecutionCompleted(double totalTimeMs);
     void OnCreateMaskDialog();
+    void OnDetectionResultRendered(const cv::Mat& visualization);
 
 private:
     Ui::MainWindow* ui;
 
     // 业务与调度核心
     PipelineManager _pipelineManager;
+    DetectionTaskManager _taskManager;
 
     // 界面核心组件
     ImageViewer* _imageViewer = nullptr;
@@ -59,6 +68,8 @@ private:
     CodePreviewWidget* _codePreview = nullptr;
     LogPanelWidget* _logPanel = nullptr;
     HistogramWidget* _histogramWidget = nullptr;
+    DetectionPanelWidget* _detectionPanel = nullptr;
+    AiAssistantWidget* _aiAssistant = nullptr;
 
     // 停靠窗口
     QDockWidget* _dockOperators = nullptr;
@@ -67,6 +78,8 @@ private:
     QDockWidget* _dockHistogram = nullptr;
     QDockWidget* _dockCode = nullptr;
     QDockWidget* _dockLog = nullptr;
+    QDockWidget* _dockDetection = nullptr;
+    QDockWidget* _dockAi = nullptr;
 
     // 状态栏标签
     QLabel* _lblStatusInfo = nullptr;

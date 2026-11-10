@@ -1,5 +1,7 @@
 #include "ProjectManager.h"
 #include "../core/OpRegistry.h"
+#include "../detection/DetectionTaskManager.h"
+#include "../utils/Logger.h"
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -8,7 +10,8 @@
 
 namespace
 {
-constexpr const char* ProjectVersion = "1.0";
+constexpr const char* ProjectVersionV1 = "1.0";
+constexpr const char* ProjectVersionV2 = "2.0";
 
 bool ApplyJsonParameter(IOpNode& op, OpParameter& parameter, const QJsonValue& value)
 {
@@ -28,10 +31,14 @@ bool ApplyJsonParameter(IOpNode& op, OpParameter& parameter, const QJsonValue& v
 }
 }
 
-bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString& filePath, QString& errorMsg)
+bool ProjectManager::SaveProject(
+    const PipelineManager& pipeline,
+    const DetectionTaskManager* taskManager,
+    const QString& filePath,
+    QString& errorMsg)
 {
     QJsonObject rootObj;
-    rootObj["version"] = ProjectVersion;
+    rootObj["version"] = ProjectVersionV2;
     rootObj["appName"] = "VisionStudio OpenCV";
 
     QJsonArray branchesArray;
@@ -91,11 +98,18 @@ bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString&
 
     rootObj["branches"] = branchesArray;
 
+    // 序列化检测任务
+    if (taskManager)
+    {
+        rootObj["detectionTasks"] = taskManager->ToJson();
+    }
+
     QJsonDocument doc(rootObj);
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         errorMsg = "无法打开文件以写入: " + file.errorString();
+        Logger::Error("ProjectManager", errorMsg.toStdString());
         return false;
     }
 
@@ -104,14 +118,25 @@ bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString&
     {
         errorMsg = "工程文件写入不完整: " + file.errorString();
         file.close();
+        Logger::Error("ProjectManager", errorMsg.toStdString());
         return false;
     }
     file.close();
     errorMsg.clear();
+    Logger::Info("ProjectManager", "工程已成功保存至: " + filePath.toStdString());
     return true;
 }
 
-bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& filePath, QString& errorMsg)
+bool ProjectManager::SaveProject(const PipelineManager& pipeline, const QString& filePath, QString& errorMsg)
+{
+    return SaveProject(pipeline, nullptr, filePath, errorMsg);
+}
+
+bool ProjectManager::LoadProject(
+    PipelineManager& pipeline,
+    DetectionTaskManager* taskManager,
+    const QString& filePath,
+    QString& errorMsg)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -139,9 +164,9 @@ bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& fileP
 
     QJsonObject rootObj = doc.object();
     const QString version = rootObj["version"].toString();
-    if (version != ProjectVersion)
+    if (version != ProjectVersionV1 && version != ProjectVersionV2)
     {
-        errorMsg = "不支持的工程文件版本: " + version;
+        errorMsg = "不支持的工程文件版本: " + version + " (支持 1.0 与 2.0)";
         return false;
     }
 
@@ -285,6 +310,12 @@ bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& fileP
         }
     }
 
+    // 反序列化检测任务 (若存在)
+    if (taskManager && rootObj.contains("detectionTasks") && rootObj["detectionTasks"].isArray())
+    {
+        taskManager->FromJson(rootObj["detectionTasks"].toArray());
+    }
+
     pipeline.SetActiveBranchIndex(0);
     if (!pipeline.GetSourceImage().empty())
     {
@@ -292,5 +323,11 @@ bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& fileP
     }
 
     errorMsg.clear();
+    Logger::Info("ProjectManager", "工程已成功从 " + filePath.toStdString() + " 导入 (版本: " + version.toStdString() + ")");
     return true;
+}
+
+bool ProjectManager::LoadProject(PipelineManager& pipeline, const QString& filePath, QString& errorMsg)
+{
+    return LoadProject(pipeline, nullptr, filePath, errorMsg);
 }

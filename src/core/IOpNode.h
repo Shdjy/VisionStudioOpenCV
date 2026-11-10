@@ -7,6 +7,7 @@
 #include <memory>
 #include <cstdint>
 #include "OpCategory.h"
+#include "OperatorMetadata.h"
 
 /**
  * @brief 参数控件类型枚举
@@ -152,6 +153,13 @@ public:
      * @brief 获取指定参数的元数据指针
      */
     virtual OpParameter* FindParameter(const std::string& name);
+
+    /**
+     * @brief 获取当前算子的标准化完整元数据
+     * @details 提供输入输出类型、参数约束、场景与前置条件描述，供 UI、校验器和 AI 知识库使用
+     * @return 标准算子元数据结构
+     */
+    virtual OperatorMetadata GetMetadata() const;
 
     /**
      * @brief 获取最近一次执行产生的结构化结果

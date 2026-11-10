@@ -33,8 +33,8 @@ elseif(EXISTS "D:/opencv4.9/build_mingw")
     list(APPEND CMAKE_PREFIX_PATH "D:/opencv4.9/build_mingw")
 endif()
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Core Gui)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Core Gui)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Core Gui Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Core Gui Network)
 
 message(STATUS "Found Qt Version: ${QT_VERSION} (Qt${QT_VERSION_MAJOR})")
 
@@ -105,6 +105,24 @@ set(BLL_SOURCES
     src/bll/PipelineStep.cpp
     src/bll/PipelineManager.cpp
     src/bll/ProjectManager.cpp
+    src/bll/PipelineValidator.cpp
+)
+
+set(DETECTION_SOURCES
+    src/detection/InspectionRuleEngine.cpp
+    src/detection/ObjectCounter.cpp
+    src/detection/DefectDetector.cpp
+    src/detection/GeometryMeasurement.cpp
+    src/detection/DetectionExecutor.cpp
+    src/detection/DetectionTaskManager.cpp
+)
+
+set(AI_SOURCES
+    src/ai/OpenAiCompatibleProvider.cpp
+    src/ai/AiConfigManager.cpp
+    src/ai/OperatorKnowledgeBase.cpp
+    src/ai/AiDetectionPlanner.cpp
+    src/ai/AiResponseValidator.cpp
 )
 
 set(CODEGEN_SOURCES
@@ -131,6 +149,9 @@ set(UI_SOURCES
     src/ui/HistogramWidget.cpp
     src/ui/AboutDialog.cpp
     src/ui/MaskEditorDialog.cpp
+    src/ui/detection/DetectionPanelWidget.cpp
+    src/ui/detection/BatchTestDialog.cpp
+    src/ui/ai/AiAssistantWidget.cpp
 )
 
 set(UI_FORMS
@@ -144,6 +165,9 @@ set(UI_FORMS
     src/ui/HistogramWidget.ui
     src/ui/AboutDialog.ui
     src/ui/MaskEditorDialog.ui
+    src/ui/detection/DetectionPanelWidget.ui
+    src/ui/detection/BatchTestDialog.ui
+    src/ui/ai/AiAssistantWidget.ui
 )
 
 # 原生 Windows 资源文件 (Qt Creator / Visual Studio 自动跨平台编译)
@@ -174,6 +198,8 @@ add_executable(${PROJECT_NAME} WIN32
     src/main.cpp
     ${CORE_SOURCES}
     ${BLL_SOURCES}
+    ${DETECTION_SOURCES}
+    ${AI_SOURCES}
     ${CODEGEN_SOURCES}
     ${UTILS_SOURCES}
     ${UI_SOURCES}
@@ -186,6 +212,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     src
     src/core
     src/bll
+    src/detection
+    src/ai
     src/codegen
     src/utils
     src/ui
@@ -197,6 +225,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Gui
+    Qt${QT_VERSION_MAJOR}::Network
     ${OpenCV_LIBS}
     dwmapi
 )
@@ -295,6 +324,8 @@ if(BUILD_TESTING)
         tests/CoreTests.cpp
         ${CORE_SOURCES}
         ${BLL_SOURCES}
+        ${DETECTION_SOURCES}
+        ${AI_SOURCES}
         ${CODEGEN_SOURCES}
         src/utils/Logger.cpp
         src/utils/ImageIoUtils.cpp
@@ -305,6 +336,8 @@ if(BUILD_TESTING)
         src
         src/core
         src/bll
+        src/detection
+        src/ai
         src/codegen
         src/utils
         ${OpenCV_INCLUDE_DIRS}
@@ -312,6 +345,7 @@ if(BUILD_TESTING)
     target_link_libraries(VisionStudio_CoreTests PRIVATE
         Qt${QT_VERSION_MAJOR}::Core
         Qt${QT_VERSION_MAJOR}::Gui
+        Qt${QT_VERSION_MAJOR}::Network
         ${OpenCV_LIBS}
     )
     if(TARGET opencv_objdetect)
