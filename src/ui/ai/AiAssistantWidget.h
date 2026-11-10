@@ -79,4 +79,7 @@ private:
         const QString& errorMessage = QString());
     void UpdateActionCardStatus();
     QString FormatMarkdownToHtml(const QString& markdown);
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 };

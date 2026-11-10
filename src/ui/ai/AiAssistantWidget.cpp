@@ -8,6 +8,7 @@
 #include <QMessageBox>
 #include <QDateTime>
 #include <QScrollBar>
+#include <QKeyEvent>
 
 AiAssistantWidget::AiAssistantWidget(
     PipelineManager* pipelineManager,
@@ -20,10 +21,14 @@ AiAssistantWidget::AiAssistantWidget(
 {
     ui->setupUi(this);
 
-    // 设置科技感图标
-    ui->btnOpenSettings->setIcon(IconUtils::CreateSettingsGearIcon(QColor(100, 116, 139)));
+    // 设置高质感矢量图标
+    ui->btnOpenSettings->setIcon(IconUtils::CreateSettingsGearIcon(QColor(176, 190, 197)));
     ui->btnApplyTask->setIcon(IconUtils::CreateInspectionReticleIcon(Qt::white));
     ui->btnApplyPipeline->setIcon(IconUtils::CreateAiSparkleIcon(Qt::white));
+    ui->btnGenerate->setIcon(IconUtils::CreateAiSparkleIcon(Qt::white));
+
+    // 为输入框安装 Ctrl+Enter 快捷发送监听
+    ui->txtRequirement->installEventFilter(this);
 
     InitUiAndConfig();
 
@@ -48,6 +53,21 @@ AiAssistantWidget::~AiAssistantWidget()
     delete ui;
 }
 
+bool AiAssistantWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == ui->txtRequirement && event->type() == QEvent::KeyPress)
+    {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if ((keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) &&
+            (keyEvent->modifiers() & Qt::ControlModifier))
+        {
+            OnGeneratePlanClicked();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void AiAssistantWidget::InitUiAndConfig()
 {
     RefreshProviderListFromConfig();
@@ -68,7 +88,12 @@ void AiAssistantWidget::RefreshProviderListFromConfig()
     int activeIdx = 0;
     for (size_t i = 0; i < profiles.size(); ++i)
     {
-        ui->cbActiveProvider->addItem(profiles[i].name, profiles[i].id);
+        QString latencyTag;
+        if (profiles[i].lastLatencyMs >= 0)
+        {
+            latencyTag = QString(" [%1ms]").arg(profiles[i].lastLatencyMs);
+        }
+        ui->cbActiveProvider->addItem(profiles[i].name + latencyTag, profiles[i].id);
         if (profiles[i].id == activeId)
         {
             activeIdx = static_cast<int>(i);
@@ -155,12 +180,12 @@ void AiAssistantWidget::OnModelChanged(const QString& model)
 void AiAssistantWidget::OnClearChatClicked()
 {
     _accumulatedChatHtml =
-        "<div style='background: linear-gradient(135deg, #f3e5f5 0%, #e8eaf6 100%); "
-        "border: 1px solid #d1c4e9; border-radius: 8px; padding: 12px; margin-bottom: 12px;'>"
-        "<div style='font-size: 14px; font-weight: bold; color: #4a148c; margin-bottom: 6px;'>"
+        "<div style='background: linear-gradient(135deg, #2d1f3d 0%, #1e2638 100%); "
+        "border: 1px solid #4a3461; border-radius: 8px; padding: 12px; margin-bottom: 12px;'>"
+        "<div style='font-size: 14px; font-weight: bold; color: #d1c4e9; margin-bottom: 6px;'>"
         "✨ VisionStudio 工业视觉 Agent 规划助手"
         "</div>"
-        "<div style='font-size: 12px; color: #424242; line-height: 1.6;'>"
+        "<div style='font-size: 12px; color: #b0bec5; line-height: 1.6;'>"
         "欢迎使用全自主视觉方案 Agent！您可以自然语言输入检测需求，也可以结合当前加载的工件图像进行多模态联合分析。<br>"
         "Agent 将在下方输出<b>中途推理思维链 (Thinking Process)</b>、算法拓扑方案与可执行的检测配置。"
         "</div>"
@@ -177,12 +202,12 @@ void AiAssistantWidget::SetCurrentSourceImage(const cv::Mat& img)
     if (!img.empty())
     {
         ui->lblImageInfo->setText(QString("(已载入: %1x%2 像素)").arg(img.cols).arg(img.rows));
-        ui->lblImageInfo->setStyleSheet("color: #2e7d32; font-weight: bold; font-size: 11px;");
+        ui->lblImageInfo->setStyleSheet("color: #81c784; font-weight: bold; font-size: 11px;");
     }
     else
     {
         ui->lblImageInfo->setText("(未载入图像)");
-        ui->lblImageInfo->setStyleSheet("color: #757575; font-size: 11px;");
+        ui->lblImageInfo->setStyleSheet("color: #9e9e9e; font-size: 11px;");
     }
 }
 
@@ -190,12 +215,12 @@ void AiAssistantWidget::AppendUserMessage(const QString& text)
 {
     QString timeStr = QDateTime::currentDateTime().toString("HH:mm:ss");
     QString userHtml = QString(
-        "<div style='margin-top: 10px; margin-bottom: 12px; display: flex; justify-content: flex-end;'>"
-        "<div style='background-color: #e3f2fd; border: 1px solid #bbdefb; border-radius: 8px; padding: 10px 14px; max-width: 90%; float: right; clear: both;'>"
-        "<div style='font-size: 11px; color: #1976d2; font-weight: bold; margin-bottom: 4px;'>"
+        "<div style='margin-top: 10px; margin-bottom: 12px; clear: both; overflow: hidden;'>"
+        "<div style='background-color: #1a365d; border: 1px solid #2b4c7e; border-radius: 8px; padding: 10px 14px; max-width: 90%; float: right;'>"
+        "<div style='font-size: 11px; color: #90caf9; font-weight: bold; margin-bottom: 4px;'>"
         "👤 需求提出 [%1]:"
         "</div>"
-        "<div style='font-size: 13px; color: #0d47a1; white-space: pre-wrap; word-break: break-word;'>"
+        "<div style='font-size: 13px; color: #e3f2fd; white-space: pre-wrap; word-break: break-word; line-height: 1.4;'>"
         "%2"
         "</div>"
         "</div>"
@@ -210,22 +235,21 @@ void AiAssistantWidget::AppendUserMessage(const QString& text)
 
 QString AiAssistantWidget::FormatMarkdownToHtml(const QString& markdown)
 {
-    // 简易但优美的 Markdown -> HTML 格式化
     QString html = markdown.toHtmlEscaped();
 
-    // 标题
-    html.replace(QRegularExpression("^### (.*)$", QRegularExpression::MultilineOption), "<h4 style='color: #283593; margin: 8px 0 4px 0;'>\\1</h4>");
-    html.replace(QRegularExpression("^## (.*)$", QRegularExpression::MultilineOption), "<h3 style='color: #1a237e; margin: 10px 0 6px 0; border-bottom: 1px solid #e0e0e0; padding-bottom: 3px;'>\\1</h3>");
-    html.replace(QRegularExpression("^# (.*)$", QRegularExpression::MultilineOption), "<h2 style='color: #0d47a1; margin: 12px 0 8px 0;'>\\1</h2>");
+    // 标题 (暗黑模式柔和高亮)
+    html.replace(QRegularExpression("^### (.*)$", QRegularExpression::MultilineOption), "<h4 style='color: #80deea; margin: 8px 0 4px 0;'>\\1</h4>");
+    html.replace(QRegularExpression("^## (.*)$", QRegularExpression::MultilineOption), "<h3 style='color: #90caf9; margin: 10px 0 6px 0; border-bottom: 1px solid #37474f; padding-bottom: 3px;'>\\1</h3>");
+    html.replace(QRegularExpression("^# (.*)$", QRegularExpression::MultilineOption), "<h2 style='color: #ce93d8; margin: 12px 0 8px 0;'>\\1</h2>");
 
     // 粗体
-    html.replace(QRegularExpression("\\*\\*(.*?)\\*\\*"), "<b>\\1</b>");
+    html.replace(QRegularExpression("\\*\\*(.*?)\\*\\*"), "<b style='color: #ffffff;'>\\1</b>");
 
     // 列表项
-    html.replace(QRegularExpression("^[\\*-] (.*)$", QRegularExpression::MultilineOption), "<li style='margin-left: 15px;'>\\1</li>");
+    html.replace(QRegularExpression("^[\\*-] (.*)$", QRegularExpression::MultilineOption), "<li style='margin-left: 15px; color: #cfd8dc;'>\\1</li>");
 
     // 行内代码
-    html.replace(QRegularExpression("`([^`]+)`"), "<code style='background-color: #f1f3f4; color: #c2185b; padding: 1px 4px; border-radius: 3px; font-family: monospace;'>\\1</code>");
+    html.replace(QRegularExpression("`([^`]+)`"), "<code style='background-color: #2c2c2c; color: #f48fb1; padding: 2px 5px; border-radius: 3px; font-family: monospace;'>\\1</code>");
 
     // 换行
     html.replace("\n", "<br>");
@@ -246,11 +270,11 @@ void AiAssistantWidget::AppendAgentMessage(
     if (!thinkingProcess.isEmpty() && _showThinking)
     {
         thinkingHtml = QString(
-            "<div style='background-color: #f8f6fc; border-left: 3px solid #7c4dff; border-radius: 4px; padding: 8px 12px; margin: 8px 0;'>"
-            "<div style='font-size: 11px; font-weight: bold; color: #651fff; margin-bottom: 4px;'>"
+            "<div style='background-color: #21192e; border-left: 3px solid #b388ff; border-radius: 4px; padding: 8px 12px; margin: 8px 0;'>"
+            "<div style='font-size: 11px; font-weight: bold; color: #b388ff; margin-bottom: 4px;'>"
             "🧠 推理与思考过程 (Thinking Process):"
             "</div>"
-            "<div style='font-size: 11.5px; color: #4a148c; font-style: italic; white-space: pre-wrap; line-height: 1.4;'>"
+            "<div style='font-size: 11.5px; color: #e1bee7; font-style: italic; white-space: pre-wrap; line-height: 1.4;'>"
             "%1"
             "</div>"
             "</div>"
@@ -264,19 +288,19 @@ void AiAssistantWidget::AppendAgentMessage(
     }
     else
     {
-        bodyHtml = QString("<div style='color: #d32f2f; font-weight: bold;'>❌ 生成或校验失败: %1</div>")
+        bodyHtml = QString("<div style='color: #ef5350; font-weight: bold;'>❌ 生成或校验失败: %1</div>")
                        .arg(errorMessage.toHtmlEscaped());
     }
 
     QString agentHtml = QString(
         "<div style='margin-top: 10px; margin-bottom: 14px; clear: both;'>"
-        "<div style='background-color: #ffffff; border: 1px solid #e0e0e0; border-top: 2px solid #7e57c2; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);'>"
-        "<div style='font-size: 12px; font-weight: bold; color: #512da8; margin-bottom: 6px; display: flex; justify-content: space-between;'>"
+        "<div style='background-color: #242424; border: 1px solid #3c3c3c; border-top: 2px solid #ab47bc; border-radius: 8px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);'>"
+        "<div style='font-size: 12px; font-weight: bold; color: #ce93d8; margin-bottom: 6px; display: flex; justify-content: space-between;'>"
         "<span>✨ Vision Agent · %1</span>"
-        "<span style='color: #9e9e9e; font-weight: normal; font-size: 11px;'>%2</span>"
+        "<span style='color: #757575; font-weight: normal; font-size: 11px;'>%2</span>"
         "</div>"
         "%3"
-        "<div style='font-size: 13px; color: #212121; margin-top: 8px; line-height: 1.5;'>"
+        "<div style='font-size: 13px; color: #e0e0e0; margin-top: 8px; line-height: 1.5;'>"
         "%4"
         "</div>"
         "</div>"
@@ -308,15 +332,15 @@ void AiAssistantWidget::OnGeneratePlanClicked()
     ui->txtRequirement->clear();
 
     ui->btnGenerate->setEnabled(false);
-    ui->btnGenerate->setText("🧠 正在深度思考\n并规划拓扑...");
+    ui->btnGenerate->setText("⏳ 正在思考...");
 
     // 展示正在思考中的临时动态卡片
     QString intermediateThinkingHtml = QString(
-        "<div id='temp_thinking' style='margin-top: 8px; margin-bottom: 8px; background-color: #f3e5f5; border: 1px dashed #ab47bc; border-radius: 6px; padding: 10px;'>"
-        "<div style='font-size: 12px; font-weight: bold; color: #6a1b9a;'>"
+        "<div id='temp_thinking' style='margin-top: 8px; margin-bottom: 8px; background-color: #2b1f3a; border: 1px dashed #ab47bc; border-radius: 6px; padding: 10px;'>"
+        "<div style='font-size: 12px; font-weight: bold; color: #ce93d8;'>"
         "⏳ Agent 正在调用模型 [%1] 进行视觉推理与拓扑求解..."
         "</div>"
-        "<div style='font-size: 11px; color: #8e24aa; margin-top: 4px;'>"
+        "<div style='font-size: 11px; color: #e1bee7; margin-top: 4px;'>"
         "• 提取需求关键词与工件特征<br>"
         "• 校验本地算子白名单与参数边界<br>"
         "• 正在接收中途推理思考思维链..."
@@ -340,7 +364,7 @@ void AiAssistantWidget::OnGeneratePlanClicked()
         AiConfigManager::Instance().GetTemperature(),
         [this, model](const ValidatedAiPlan& plan) {
             ui->btnGenerate->setEnabled(true);
-            ui->btnGenerate->setText("✨ 发送\n生成方案");
+            ui->btnGenerate->setText("✨ 发送方案");
 
             _lastPlan = plan;
             AppendAgentMessage(model, plan.ThinkingProcess, plan.AnalysisMarkdown, plan.IsValid, plan.ErrorMessage);
@@ -365,10 +389,10 @@ void AiAssistantWidget::OnToggleThinkingClicked()
     _showThinking = !_showThinking;
     ui->btnToggleThinking->setText(_showThinking ? "🧠 隐藏思考链" : "🧠 显示思考链");
 
-    // 刷新显示
+    // 重新刷新最后一条消息以更新显隐
     if (_lastPlan.IsValid)
     {
-        // 保持界面当前呈现
+        // 维持会话完整展示
     }
 }
 
