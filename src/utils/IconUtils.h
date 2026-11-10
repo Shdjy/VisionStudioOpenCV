@@ -49,4 +49,36 @@ public:
      * @return 高清矢量 QIcon
      */
     static QIcon CreateDeselectAllIcon(const QColor& color = QColor(176, 176, 176), int size = 64);
+
+    /**
+     * @brief 创建现代通用 AI 闪耀星辉 (Sparkle) 图标
+     * @param color 图标主体颜色 (默认星耀紫/蓝 #B388FF)
+     * @param size 渲染基准分辨率 (默认 64px)
+     * @return 高清矢量 QIcon
+     */
+    static QIcon CreateAiSparkleIcon(const QColor& color = QColor(179, 136, 255), int size = 64);
+
+    /**
+     * @brief 创建工业视觉 AI 智能芯片 (AI Chip) 图标
+     * @param color 图标主体颜色 (默认科技青 #00E5FF)
+     * @param size 渲染基准分辨率 (默认 64px)
+     * @return 高清矢量 QIcon
+     */
+    static QIcon CreateAiChipIcon(const QColor& color = QColor(0, 229, 255), int size = 64);
+
+    /**
+     * @brief 创建标准设置齿轮 (Settings Gear) 矢量图标
+     * @param color 图标颜色 (默认浅银灰 #CFD8DC)
+     * @param size 渲染基准分辨率 (默认 64px)
+     * @return 高清矢量 QIcon
+     */
+    static QIcon CreateSettingsGearIcon(const QColor& color = QColor(207, 216, 220), int size = 64);
+
+    /**
+     * @brief 创建工业视觉检测/光学十字靶标 (Inspection Reticle) 图标
+     * @param color 图标颜色 (默认暖金黄 #FFA726)
+     * @param size 渲染基准分辨率 (默认 64px)
+     * @return 高清矢量 QIcon
+     */
+    static QIcon CreateInspectionReticleIcon(const QColor& color = QColor(255, 167, 38), int size = 64);
 };
