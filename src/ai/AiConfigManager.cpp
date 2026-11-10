@@ -8,7 +8,7 @@
 namespace
 {
 constexpr const char* DefaultBaseUrl = "https://api.tokenskingdom.com/v1";
-constexpr const char* DefaultApiKey = "sk-ec53d4c931f986190063a14a5ab287bfa443971621ce97f52d4622c951811ffb";
+constexpr const char* DefaultApiKey = "";
 constexpr const char* DefaultModel = "gpt-6.1-sol";
 constexpr const char* DefaultActiveProfileId = "tokenskingdom";
 }

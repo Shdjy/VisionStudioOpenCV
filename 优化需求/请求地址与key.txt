@@ -1,3 +1,3 @@
-sk-ec53d4c931f986190063a14a5ab287bfa443971621ce97f52d4622c951811ffb
+sk-your-tokenskingdom-api-key-here
 
 https://api.tokenskingdom.com/v1

@@ -762,7 +762,12 @@ void TestAiResponseValidator()
 void TestLiveAiProviderAndModelsFetch()
 {
     QString baseUrl = "https://api.tokenskingdom.com/v1";
-    QString apiKey = "sk-ec53d4c931f986190063a14a5ab287bfa443971621ce97f52d4622c951811ffb";
+    QString apiKey = qEnvironmentVariable("VISIONSTUDIO_TEST_API_KEY");
+    if (apiKey.isEmpty())
+    {
+        std::cout << "[INFO] VISIONSTUDIO_TEST_API_KEY 未设置，跳过在线模型实时拉取测试 (正常行为)" << std::endl;
+        return;
+    }
 
     OpenAiCompatibleProvider provider(baseUrl, apiKey);
 
@@ -809,7 +814,6 @@ void TestAiProviderProfilesManager()
         {
             hasTk = true;
             Require(!p.baseUrl.isEmpty(), "TokensKingdom baseUrl should not be empty");
-            Require(!p.apiKey.isEmpty(), "TokensKingdom apiKey should not be empty");
         }
     }
     Require(hasTk, "Default profiles should contain tokenskingdom");
@@ -885,7 +889,12 @@ void TestAiThinkingProcessExtraction()
 void TestLiveAiConnectivityAndLatency()
 {
     QString baseUrl = "https://api.tokenskingdom.com/v1";
-    QString apiKey = "sk-ec53d4c931f986190063a14a5ab287bfa443971621ce97f52d4622c951811ffb";
+    QString apiKey = qEnvironmentVariable("VISIONSTUDIO_TEST_API_KEY");
+    if (apiKey.isEmpty())
+    {
+        std::cout << "[INFO] VISIONSTUDIO_TEST_API_KEY 未设置，跳过在线连通性与测速测试 (正常行为)" << std::endl;
+        return;
+    }
 
     OpenAiCompatibleProvider provider(baseUrl, apiKey);
 

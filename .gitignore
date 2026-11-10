@@ -30,3 +30,9 @@ Thumbs.db
 *.7z
 *.rar
 _dist_portable/
+
+# 敏感凭据与私有配置
+*key*.txt
+*.key
+*.env
+优化需求/
