@@ -749,6 +749,14 @@ void TestAiResponseValidator()
     )";
     ValidatedAiPlan badPlan = AiResponseValidator::ValidateAndParse(hallucinatedPipeline);
     Require(!badPlan.HasPipeline, "hallucinated operator should not produce valid pipeline");
+
+    // 4. 验证自然语言未带 JSON 代码块时的文本算子扫描智能兜底
+    QString conversationalAiResponse =
+        "针对您的工件检测需求，我建议先使用高斯滤波 (GaussianBlur) 平滑噪点，然后使用二值化 (Threshold) 分割前景，最后通过边缘检测 (Canny) 提取轮廓。";
+    ValidatedAiPlan textPlan = AiResponseValidator::ValidateAndParse(conversationalAiResponse);
+    Require(textPlan.IsValid, "conversational plan should be valid");
+    Require(textPlan.HasPipeline, "fallback scanner should extract pipeline from natural language text");
+    Require(textPlan.PipelineSteps.size() >= 2, "fallback scanner should extract multiple operators");
 }
 
 void TestLiveAiProviderAndModelsFetch()

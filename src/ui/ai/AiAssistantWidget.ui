@@ -401,21 +401,21 @@
           </property>
           <property name="minimumSize">
            <size>
-            <width>95</width>
+            <width>75</width>
             <height>32</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
-            <width>110</width>
+            <width>90</width>
             <height>32</height>
            </size>
           </property>
           <property name="styleSheet">
-           <string notr="true">QPushButton#btnGenerate { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8e24aa, stop:1 #5e35b1); color: white; font-weight: bold; font-size: 12px; border-radius: 6px; padding: 4px 12px; border: 1px solid #7b1fa2; } QPushButton#btnGenerate:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ab47bc, stop:1 #673ab7); } QPushButton#btnGenerate:disabled { background: #424242; color: #757575; border: 1px solid #333333; }</string>
+           <string notr="true">QPushButton#btnGenerate { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8e24aa, stop:1 #5e35b1); color: white; font-weight: bold; font-size: 12px; border-radius: 6px; padding: 4px 10px; border: 1px solid #7b1fa2; } QPushButton#btnGenerate:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ab47bc, stop:1 #673ab7); } QPushButton#btnGenerate:disabled { background: #424242; color: #757575; border: 1px solid #333333; }</string>
           </property>
           <property name="text">
-           <string>✨ 发送方案</string>
+           <string>发送</string>
           </property>
          </widget>
         </item>

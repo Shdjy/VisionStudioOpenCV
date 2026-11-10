@@ -25,7 +25,6 @@ AiAssistantWidget::AiAssistantWidget(
     ui->btnOpenSettings->setIcon(IconUtils::CreateSettingsGearIcon(QColor(176, 190, 197)));
     ui->btnApplyTask->setIcon(IconUtils::CreateInspectionReticleIcon(Qt::white));
     ui->btnApplyPipeline->setIcon(IconUtils::CreateAiSparkleIcon(Qt::white));
-    ui->btnGenerate->setIcon(IconUtils::CreateAiSparkleIcon(Qt::white));
 
     // 为输入框安装 Ctrl+Enter 快捷发送监听
     ui->txtRequirement->installEventFilter(this);
@@ -332,7 +331,7 @@ void AiAssistantWidget::OnGeneratePlanClicked()
     ui->txtRequirement->clear();
 
     ui->btnGenerate->setEnabled(false);
-    ui->btnGenerate->setText("⏳ 正在思考...");
+    ui->btnGenerate->setText("发送中...");
 
     // 展示正在思考中的临时动态卡片
     QString intermediateThinkingHtml = QString(
@@ -364,7 +363,7 @@ void AiAssistantWidget::OnGeneratePlanClicked()
         AiConfigManager::Instance().GetTemperature(),
         [this, model](const ValidatedAiPlan& plan) {
             ui->btnGenerate->setEnabled(true);
-            ui->btnGenerate->setText("✨ 发送方案");
+            ui->btnGenerate->setText("发送");
 
             _lastPlan = plan;
             AppendAgentMessage(model, plan.ThinkingProcess, plan.AnalysisMarkdown, plan.IsValid, plan.ErrorMessage);

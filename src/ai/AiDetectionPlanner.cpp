@@ -58,13 +58,20 @@ void AiDetectionPlanner::PlanDetectionAsync(
 
     QJsonArray messages;
 
-    // 1. 系统提示词 (包含算子知识库和 JSON 约束)
+    // 1. 系统提示词 (包含算子知识库和 JSON 强制约束)
     QJsonObject sysMsg;
     sysMsg["role"] = "system";
     sysMsg["content"] = OperatorKnowledgeBase::BuildSystemPrompt();
     messages.append(sysMsg);
 
-    // 2. 用户需求消息 (支持多模态图像)
+    // 2. 强化用户需求：显式指示在末尾生成 ```json { "pipeline": [...] } ``` 或检测任务
+    QString promptWithInstruction = userRequirement.trimmed();
+    promptWithInstruction +=
+        "\n\n【强制输出要求】：请对上述视觉需求进行专业分析，并在回答末尾输出一个严格规范的 ```json ... ``` 代码块！"
+        "若包含算子处理流程，请输出包含具体算子与推荐参数的 {\"pipeline\": [ ... ]}；"
+        "若为质检判定，输出包含 {\"taskType\": ...} 的任务配置。以便本软件直接载入流水线或检测面板执行。";
+
+    // 3. 用户需求消息 (支持多模态图像)
     QJsonObject userMsg;
     userMsg["role"] = "user";
 
@@ -75,7 +82,7 @@ void AiDetectionPlanner::PlanDetectionAsync(
 
         QJsonObject textPart;
         textPart["type"] = "text";
-        textPart["text"] = userRequirement;
+        textPart["text"] = promptWithInstruction;
         contentArr.append(textPart);
 
         QJsonObject imagePart;
@@ -90,7 +97,7 @@ void AiDetectionPlanner::PlanDetectionAsync(
     }
     else
     {
-        userMsg["content"] = userRequirement;
+        userMsg["content"] = promptWithInstruction;
     }
 
     messages.append(userMsg);
