@@ -6,6 +6,7 @@
 #include "AboutDialog.h"
 #include "MaskEditorDialog.h"
 #include "detection/BatchTestDialog.h"
+#include "ai/AiSettingsDialog.h"
 #include "../core/OpRegistry.h"
 #include "../bll/ProjectManager.h"
 #include "../utils/Logger.h"
@@ -195,8 +196,8 @@ void MainWindow::InitUiAndDocks()
     connect(actionCreateMask, &QAction::triggered, this, &MainWindow::OnCreateMaskDialog);
     ui->mainToolBar->addAction(actionCreateMask);
 
-    // 智能检测 Dock 快捷唤出
-    auto* actionToggleDetection = new QAction(style()->standardIcon(QStyle::SP_DialogApplyButton), "智能检测与质检面板", this);
+    // 智能检测 Dock 快捷唤出 (专属质检瞄准十字图标)
+    auto* actionToggleDetection = new QAction(IconUtils::CreateInspectionReticleIcon(QColor(46, 125, 50)), "智能检测与质检面板", this);
     actionToggleDetection->setCheckable(true);
     actionToggleDetection->setChecked(true);
     actionToggleDetection->setToolTip("显示/隐藏 智能检测与质检面板 (Alt+D)");
@@ -206,19 +207,27 @@ void MainWindow::InitUiAndDocks()
     connect(_dockDetection, &QDockWidget::visibilityChanged, actionToggleDetection, &QAction::setChecked);
     ui->mainToolBar->addAction(actionToggleDetection);
 
-    // AI 视觉助手 Dock 快捷唤出
-    auto* actionToggleAi = new QAction(style()->standardIcon(QStyle::SP_ComputerIcon), "AI 视觉助手", this);
+    // AI 视觉助手 Dock 快捷唤出 (专属高科技 AI 星芒图标)
+    auto* actionToggleAi = new QAction(IconUtils::CreateAiSparkleIcon(QColor(147, 51, 234)), "AI 视觉助手", this);
     actionToggleAi->setCheckable(true);
     actionToggleAi->setChecked(false);
     actionToggleAi->setToolTip("显示/隐藏 AI 智能视觉助手面板 (Alt+A)");
-    actionToggleAi->setStatusTip("使用大模型自动获取模型并规划检测方案");
+    actionToggleAi->setStatusTip("使用大模型自动获取模型并规划检测方案 (支持中途推理过程)");
     actionToggleAi->setShortcut(QKeySequence("Alt+A"));
     connect(actionToggleAi, &QAction::triggered, this, &MainWindow::OnToggleAiDock);
     connect(_dockAi, &QDockWidget::visibilityChanged, actionToggleAi, &QAction::setChecked);
     ui->mainToolBar->addAction(actionToggleAi);
 
-    // 批量测试对话框快捷入口
-    auto* actionBatchTest = new QAction(style()->standardIcon(QStyle::SP_FileDialogDetailedView), "批量测试与统计评估", this);
+    // AI 服务商与大模型设置 (CC Switch 风格独立设置窗口)
+    auto* actionAiSettings = new QAction(IconUtils::CreateSettingsGearIcon(QColor(100, 116, 139)), "AI 服务商设置", this);
+    actionAiSettings->setToolTip("打开 AI 服务商多配置管理中心 (CC Switch 风格) (Alt+S)");
+    actionAiSettings->setStatusTip("配置与切换 OpenAI 兼容聚合、DeepSeek、OpenAI、本地 Ollama 服务商与密钥");
+    actionAiSettings->setShortcut(QKeySequence("Alt+S"));
+    connect(actionAiSettings, &QAction::triggered, this, &MainWindow::OnShowAiSettingsDialog);
+    ui->mainToolBar->addAction(actionAiSettings);
+
+    // 批量测试对话框快捷入口 (芯片质检矢量图标)
+    auto* actionBatchTest = new QAction(IconUtils::CreateAiChipIcon(QColor(0, 150, 136)), "批量测试与统计评估", this);
     actionBatchTest->setToolTip("批量对整个文件夹图像执行检测并统计良品率 (Alt+B)");
     actionBatchTest->setStatusTip("批量执行质检并导出 CSV 报表");
     actionBatchTest->setShortcut(QKeySequence("Alt+B"));
@@ -257,6 +266,15 @@ void MainWindow::InitUiAndDocks()
     ui->menuView->addAction(actionBatchTest);
     ui->menuView->addAction(actionToggleCode);
     ui->menuView->addAction(actionToggleLog);
+
+    // 专属顶级菜单: 智能 AI 与检测 (&A)
+    QMenu* menuAi = new QMenu("智能 AI 与检测 (&A)", this);
+    menuAi->addAction(actionToggleAi);
+    menuAi->addAction(actionAiSettings);
+    menuAi->addSeparator();
+    menuAi->addAction(actionToggleDetection);
+    menuAi->addAction(actionBatchTest);
+    ui->menuBar->insertMenu(ui->menuView->menuAction(), menuAi);
 
     // 15. 状态栏
     _lblStatusInfo = new QLabel("就绪", this);
@@ -704,4 +722,10 @@ void MainWindow::OnPipelineExecutionCompleted(double totalTimeMs)
     {
         _imageViewer->SetImage(_pipelineManager.GetFinalOutput(), _pipelineManager.GetSourceImage());
     }
+}
+
+void MainWindow::OnShowAiSettingsDialog()
+{
+    AiSettingsDialog dlg(this);
+    dlg.exec();
 }

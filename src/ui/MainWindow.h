@@ -51,6 +51,7 @@ private slots:
     void OnStepSelected(int index);
     void OnPipelineExecutionCompleted(double totalTimeMs);
     void OnCreateMaskDialog();
+    void OnShowAiSettingsDialog();
     void OnDetectionResultRendered(const cv::Mat& visualization);
 
 private:

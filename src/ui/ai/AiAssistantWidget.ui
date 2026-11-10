@@ -6,13 +6,13 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>450</width>
-    <height>750</height>
+    <width>500</width>
+    <height>760</height>
    </rect>
   </property>
-  <layout class="QVBoxLayout" name="mainLayout">
+  <layout class="QVBoxLayout" name="mainVLayout">
    <property name="spacing">
-    <number>6</number>
+    <number>4</number>
    </property>
    <property name="leftMargin">
     <number>6</number>
@@ -26,211 +26,324 @@
    <property name="bottomMargin">
     <number>6</number>
    </property>
+   <!-- 顶部精简导航与服务商切换条 (类似 CC Switch / Agent 顶栏) -->
    <item>
-    <widget class="QGroupBox" name="grpConfig">
-     <property name="title">
-      <string>大语言模型与 API 服务配置</string>
+    <widget class="QFrame" name="headerFrame">
+     <property name="styleSheet">
+      <string notr="true">QFrame#headerFrame { background-color: #f7f9fa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 2px; }</string>
      </property>
-     <layout class="QFormLayout" name="formConfig">
-      <item row="0" column="0">
-       <widget class="QLabel" name="lblBaseUrl">
-        <property name="text">
-         <string>API 基础地址:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QLineEdit" name="txtBaseUrl"/>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="lblApiKey">
-        <property name="text">
-         <string>API Key 密钥:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QLineEdit" name="txtApiKey">
-        <property name="echoMode">
-         <enum>QLineEdit::Password</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="lblModel">
-        <property name="text">
-         <string>在线模型:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <layout class="QHBoxLayout" name="hboxModel">
-        <item>
-         <widget class="QComboBox" name="cbModel">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btnFetchModels">
-          <property name="styleSheet">
-           <string notr="true">background-color: #1976d2; color: white;</string>
-          </property>
-          <property name="text">
-           <string>自动获取模型</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item row="3" column="1">
-       <widget class="QLabel" name="lblModelStatus">
-        <property name="styleSheet">
-         <string notr="true">color: #4caf50; font-size: 11px;</string>
-        </property>
-        <property name="text">
-         <string>点击“自动获取模型”从服务端动态拉取</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="QGroupBox" name="grpPrompt">
-     <property name="title">
-      <string>视觉需求自然语言描述</string>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
      </property>
-     <layout class="QVBoxLayout" name="vboxPrompt">
+     <layout class="QHBoxLayout" name="headerLayout">
+      <property name="leftMargin">
+       <number>6</number>
+      </property>
+      <property name="topMargin">
+       <number>3</number>
+      </property>
+      <property name="rightMargin">
+       <number>6</number>
+      </property>
+      <property name="bottomMargin">
+       <number>3</number>
+      </property>
       <item>
-       <layout class="QHBoxLayout" name="hboxQuickTemplates">
-        <item>
-         <widget class="QPushButton" name="btnTplCount">
-          <property name="text">
-           <string>示例: 瓶盖数量统计 (12个)</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btnTplDefect">
-          <property name="text">
-           <string>示例: 金属表面缺陷检测</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QLabel" name="lblAgentBadge">
+        <property name="font">
+         <font>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>✨ AI Agent</string>
+        </property>
+       </widget>
       </item>
       <item>
-       <widget class="QTextEdit" name="txtRequirement">
-        <property name="maximumSize">
+       <widget class="QComboBox" name="cbActiveProvider">
+        <property name="toolTip">
+         <string>快速切换 AI 服务商 (支持 TokensKingdom / DeepSeek / 本地 Ollama 等)</string>
+        </property>
+        <property name="minimumSize">
          <size>
-          <width>16777215</width>
-          <height>85</height>
+          <width>130</width>
+          <height>0</height>
          </size>
         </property>
-        <property name="placeholderText">
-         <string>输入您的检测需求，例如：“统计画面中有多少个药片，要求正好为24个，少于则NG”...</string>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="cbModel">
+        <property name="toolTip">
+         <string>当前对话使用的模型</string>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="editable">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="hboxAction">
-        <item>
-         <widget class="QCheckBox" name="chkIncludeImage">
-          <property name="text">
-           <string>附带当前主视图图像进行多模态视觉分析</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btnGenerate">
-          <property name="minimumSize">
-           <size>
-            <width>0</width>
-            <height>34</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">font-weight: bold; background-color: #6a1b9a; color: white;</string>
-          </property>
-          <property name="text">
-           <string>✨ AI 智能规划并生成算法方案</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QPushButton" name="btnOpenSettings">
+        <property name="toolTip">
+         <string>打开 AI 服务商管理中心 (类似 CC Switch 独立设置)</string>
+        </property>
+        <property name="text">
+         <string>⚙ 设置...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnClearChat">
+        <property name="toolTip">
+         <string>清空当前会话记录</string>
+        </property>
+        <property name="text">
+         <string>🗑</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>
    </item>
+   <!-- 中间智能 Agent 会话消息流展示区 -->
    <item>
-    <widget class="QTabWidget" name="tabOutput">
-     <property name="currentIndex">
-      <number>0</number>
+    <widget class="QTextBrowser" name="chatBrowser">
+     <property name="styleSheet">
+      <string notr="true">QTextBrowser { background-color: #ffffff; border: 1px solid #dcdcdc; border-radius: 6px; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; font-size: 13px; line-height: 1.5; padding: 8px; }</string>
      </property>
-     <widget class="QWidget" name="tabAnalysis">
-      <attribute name="title">
-       <string>AI 方案解析与视觉建议</string>
-      </attribute>
-      <layout class="QVBoxLayout" name="vboxTabAnalysis">
-       <item>
-        <widget class="QTextBrowser" name="txtAnalysis">
-         <property name="openExternalLinks">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="tabJson">
-      <attribute name="title">
-       <string>生成的结构化任务 JSON</string>
-      </attribute>
-      <layout class="QVBoxLayout" name="vboxTabJson">
-       <item>
-        <widget class="QTextEdit" name="txtJsonConfig"/>
-       </item>
-      </layout>
-     </widget>
+     <property name="openExternalLinks">
+      <bool>false</bool>
+     </property>
     </widget>
    </item>
+   <!-- 行动触发卡片工具条 (当 AI 给出方案时高亮可用) -->
    <item>
-    <layout class="QHBoxLayout" name="hboxApply">
+    <widget class="QFrame" name="actionCardFrame">
+     <property name="styleSheet">
+      <string notr="true">QFrame#actionCardFrame { background-color: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 4px; padding: 3px; }</string>
+     </property>
+     <layout class="QHBoxLayout" name="actionLayout">
+      <property name="leftMargin">
+       <number>6</number>
+      </property>
+      <property name="topMargin">
+       <number>3</number>
+      </property>
+      <property name="rightMargin">
+       <number>6</number>
+      </property>
+      <property name="bottomMargin">
+       <number>3</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="lblActionHint">
+        <property name="text">
+         <string>💡 方案动作:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnApplyTask">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: #2e7d32; color: white; font-weight: bold; padding: 4px 8px;</string>
+        </property>
+        <property name="text">
+         <string>⚡ 应用为检测任务</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnApplyPipeline">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: #1565c0; color: white; font-weight: bold; padding: 4px 8px;</string>
+        </property>
+        <property name="text">
+         <string>📋 载入到主流水线</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnToggleThinking">
+        <property name="text">
+         <string>🧠 显示/隐藏思考链</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="actionSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <!-- 快捷场景标签栏 -->
+   <item>
+    <layout class="QHBoxLayout" name="quickTemplateLayout">
      <item>
-      <widget class="QPushButton" name="btnApplyTask">
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>32</height>
-        </size>
-       </property>
+      <widget class="QLabel" name="lblQuickTag">
        <property name="styleSheet">
-        <string notr="true">font-weight: bold; background-color: #2e7d32; color: white;</string>
+        <string notr="true">color: #757575; font-size: 11px;</string>
        </property>
        <property name="text">
-        <string>✔ 一键应用为检测任务</string>
+        <string>快速提示词:</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="btnApplyPipeline">
+      <widget class="QPushButton" name="btnTplCount">
+       <property name="styleSheet">
+        <string notr="true">font-size: 11px; padding: 2px 6px;</string>
+       </property>
+       <property name="text">
+        <string>🔘 瓶盖工件计数</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnTplDefect">
+       <property name="styleSheet">
+        <string notr="true">font-size: 11px; padding: 2px 6px;</string>
+       </property>
+       <property name="text">
+        <string>🔍 表面划痕缺陷</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnTplMeasure">
+       <property name="styleSheet">
+        <string notr="true">font-size: 11px; padding: 2px 6px;</string>
+       </property>
+       <property name="text">
+        <string>📐 几何尺寸测量</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="quickSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <!-- 底部多模态状态与提示输入区 -->
+   <item>
+    <layout class="QHBoxLayout" name="imageStatusLayout">
+     <item>
+      <widget class="QCheckBox" name="chkIncludeImage">
+       <property name="toolTip">
+        <string>勾选后将主界面的工件图像作为多模态视觉上下文一同发给大模型</string>
+       </property>
+       <property name="text">
+        <string>附带当前主图像进行视觉推理分析</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblImageInfo">
+       <property name="styleSheet">
+        <string notr="true">color: #616161; font-size: 11px;</string>
+       </property>
+       <property name="text">
+        <string>(未载入图像)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="imgSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="inputRowLayout">
+     <item>
+      <widget class="QPlainTextEdit" name="txtRequirement">
        <property name="minimumSize">
         <size>
          <width>0</width>
-         <height>32</height>
+         <height>68</height>
         </size>
        </property>
-       <property name="text">
-        <string>应用到图像算子流水线</string>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>120</height>
+        </size>
+       </property>
+       <property name="placeholderText">
+        <string>输入您的工业视觉检测需求，例如：“检测暗色背景下的白色工件数量，过滤面积小于100的杂质” (支持多模态图像联合推理)...</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="sendBtnLayout">
+       <item>
+        <widget class="QPushButton" name="btnGenerate">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>85</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QPushButton#btnGenerate { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #7b1fa2, stop:1 #512da8); color: white; font-weight: bold; font-size: 13px; border-radius: 4px; padding: 6px; } QPushButton#btnGenerate:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #8e24aa, stop:1 #5e35b1); }</string>
+         </property>
+         <property name="text">
+          <string>✨ 发送
+生成方案</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
     </layout>
    </item>

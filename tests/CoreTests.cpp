@@ -769,6 +769,127 @@ void TestLiveAiProviderAndModelsFetch()
     }
     std::cout << std::endl;
 }
+
+void TestAiProviderProfilesManager()
+{
+    AiConfigManager& cfg = AiConfigManager::Instance();
+    auto profiles = cfg.GetProfiles();
+    Require(!profiles.empty(), "Profiles should not be empty by default");
+
+    // 验证默认包含 TokensKingdom 和 DeepSeek 等
+    bool hasTk = false;
+    for (const auto& p : profiles)
+    {
+        if (p.id == "tokenskingdom")
+        {
+            hasTk = true;
+            Require(!p.baseUrl.isEmpty(), "TokensKingdom baseUrl should not be empty");
+            Require(!p.apiKey.isEmpty(), "TokensKingdom apiKey should not be empty");
+        }
+    }
+    Require(hasTk, "Default profiles should contain tokenskingdom");
+
+    // 测试添加临时 Profile
+    AiProviderProfile customProf;
+    customProf.id = "test_custom_provider";
+    customProf.name = "Unit Test Provider";
+    customProf.type = AiProviderType::Custom;
+    customProf.baseUrl = "https://custom.api.test/v1";
+    customProf.apiKey = "test_key_123";
+    customProf.selectedModel = "custom-vision-v1";
+    customProf.cachedModels = { "custom-vision-v1", "custom-fast" };
+
+    cfg.AddOrUpdateProfile(customProf);
+
+    AiProviderProfile queried;
+    bool found = cfg.GetProfile("test_custom_provider", queried);
+    Require(found, "Custom profile should be found after AddOrUpdateProfile");
+    Require(queried.name == "Unit Test Provider", "Profile name match");
+
+    // 测试切换激活服务商
+    cfg.SetActiveProfileId("test_custom_provider");
+    Require(cfg.GetActiveProfileId() == "test_custom_provider", "Active profile id match");
+    Require(cfg.GetBaseUrl() == "https://custom.api.test/v1", "Compatible GetBaseUrl match");
+    Require(cfg.GetApiKey() == "test_key_123", "Compatible GetApiKey match");
+
+    // 恢复激活并清理
+    cfg.SetActiveProfileId("tokenskingdom");
+    cfg.DeleteProfile("test_custom_provider");
+    Require(!cfg.GetProfile("test_custom_provider", queried), "Deleted profile should not exist");
+}
+
+void TestAiThinkingProcessExtraction()
+{
+    QString aiResponseWithThink =
+        "<think>\n"
+        "1. 接收到瓶盖目标计数需求。\n"
+        "2. 分析图像：暗色背景，白色圆形工件。\n"
+        "3. 推荐使用高斯滤波去噪 -> OTSU二值化 -> 轮廓分析提取圆形。\n"
+        "</think>\n"
+        "### 瓶盖计数方案概述\n"
+        "本方案采用经典的形态学与几何轮廓计数流程。\n"
+        "```json\n"
+        "{\n"
+        "  \"taskType\": \"ObjectCounting\",\n"
+        "  \"name\": \"瓶盖自动计数任务\",\n"
+        "  \"configuration\": {\n"
+        "    \"kernelSize\": 5,\n"
+        "    \"minArea\": 50.0,\n"
+        "    \"maxArea\": 50000.0\n"
+        "  },\n"
+        "  \"rules\": [\n"
+        "    {\n"
+        "      \"metric\": \"count\",\n"
+        "      \"condition\": \"range\",\n"
+        "      \"minVal\": 10,\n"
+        "      \"maxVal\": 15\n"
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "```";
+
+    ValidatedAiPlan plan = AiResponseValidator::ValidateAndParse(aiResponseWithThink);
+    Require(plan.IsValid, "Plan should be valid");
+    Require(plan.HasDetectionTask, "Plan should contain detection task");
+    Require(!plan.ThinkingProcess.isEmpty(), "Thinking process should be extracted");
+    Require(plan.ThinkingProcess.contains("接收到瓶盖目标计数需求"), "Thinking process should contain thoughts");
+    Require(!plan.AnalysisMarkdown.contains("<think>"), "Markdown should not contain raw think tag");
+    Require(plan.AnalysisMarkdown.contains("瓶盖计数方案概述"), "Markdown should contain solution body");
+}
+
+void TestLiveAiConnectivityAndLatency()
+{
+    QString baseUrl = "https://api.tokenskingdom.com/v1";
+    QString apiKey = "sk-ec53d4c931f986190063a14a5ab287bfa443971621ce97f52d4622c951811ffb";
+
+    OpenAiCompatibleProvider provider(baseUrl, apiKey);
+
+    QEventLoop loop;
+    bool reqSuccess = false;
+    qint64 latencyMs = -1;
+    QStringList modelsList;
+    QString reqError;
+
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+    provider.TestConnectivityAsync([&](bool success, qint64 lat, const QStringList& models, const QString& error) {
+        reqSuccess = success;
+        latencyMs = lat;
+        modelsList = models;
+        reqError = error;
+        loop.quit();
+    });
+
+    timer.start(15000);
+    loop.exec();
+
+    Require(reqSuccess, "Live API connectivity test failed: " + reqError.toStdString());
+    Require(latencyMs > 0, "Latency should be positive");
+    Require(!modelsList.isEmpty(), "Models should be populated");
+    std::cout << "Live AI latency measured: " << latencyMs << " ms (" << modelsList.size() << " models verified)" << std::endl;
+}
 }
 
 int main(int argc, char* argv[])
@@ -796,6 +917,9 @@ int main(int argc, char* argv[])
         TestProjectManagerV2WithTasks();
         TestAiResponseValidator();
         TestLiveAiProviderAndModelsFetch();
+        TestAiProviderProfilesManager();
+        TestAiThinkingProcessExtraction();
+        TestLiveAiConnectivityAndLatency();
         std::cout << "All VisionStudio core tests passed." << std::endl;
         return 0;
     }

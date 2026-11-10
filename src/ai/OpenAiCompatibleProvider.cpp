@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QTimer>
 #include <QUrl>
+#include <QElapsedTimer>
 
 OpenAiCompatibleProvider::OpenAiCompatibleProvider(
     const QString& baseUrl,
@@ -32,8 +33,8 @@ QString OpenAiCompatibleProvider::NormalizeUrl(const QString& endpoint) const
     return base + ep;
 }
 
-void OpenAiCompatibleProvider::FetchModelsAsync(
-    std::function<void(bool success, const QStringList& models, const QString& error)> callback)
+void OpenAiCompatibleProvider::TestConnectivityAsync(
+    std::function<void(bool success, qint64 latencyMs, const QStringList& models, const QString& error)> callback)
 {
     QString urlStr = NormalizeUrl("/models");
     QUrl url(urlStr);
@@ -45,11 +46,11 @@ void OpenAiCompatibleProvider::FetchModelsAsync(
         request.setRawHeader("Authorization", ("Bearer " + _apiKey.trimmed()).toUtf8());
     }
 
-    Logger::Info("OpenAiCompatibleProvider", "开始异步获取模型列表: " + urlStr.toStdString());
+    QElapsedTimer* timerWatch = new QElapsedTimer();
+    timerWatch->start();
 
     QNetworkReply* reply = _netManager.get(request);
 
-    // 设置请求超时定时器
     QTimer* timer = new QTimer(reply);
     timer->setSingleShot(true);
     connect(timer, &QTimer::timeout, reply, [reply]() {
@@ -60,7 +61,9 @@ void OpenAiCompatibleProvider::FetchModelsAsync(
     });
     timer->start(_timeoutMs);
 
-    connect(reply, &QNetworkReply::finished, this, [reply, timer, callback]() {
+    connect(reply, &QNetworkReply::finished, this, [reply, timer, timerWatch, callback]() {
+        qint64 latencyMs = timerWatch->elapsed();
+        delete timerWatch;
         timer->stop();
         reply->deleteLater();
 
@@ -69,14 +72,13 @@ void OpenAiCompatibleProvider::FetchModelsAsync(
             QString err = reply->errorString();
             int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             QByteArray errorBody = reply->readAll();
-            QString fullMsg = QString("获取模型失败 (HTTP %1): %2 %3")
+            QString fullMsg = QString("连接失败 (HTTP %1): %2 %3")
                                   .arg(statusCode)
                                   .arg(err)
-                                  .arg(QString::fromUtf8(errorBody));
-            Logger::Error("OpenAiCompatibleProvider", fullMsg.toStdString());
+                                  .arg(QString::fromUtf8(errorBody).trimmed());
             if (callback)
             {
-                callback(false, QStringList(), fullMsg);
+                callback(false, latencyMs, QStringList(), fullMsg);
             }
             return;
         }
@@ -86,11 +88,10 @@ void OpenAiCompatibleProvider::FetchModelsAsync(
         QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
         if (parseErr.error != QJsonParseError::NoError || !doc.isObject())
         {
-            QString msg = "解析模型响应 JSON 失败: " + parseErr.errorString();
-            Logger::Error("OpenAiCompatibleProvider", msg.toStdString());
+            QString msg = "解析响应 JSON 失败: " + parseErr.errorString();
             if (callback)
             {
-                callback(false, QStringList(), msg);
+                callback(false, latencyMs, QStringList(), msg);
             }
             return;
         }
@@ -113,13 +114,36 @@ void OpenAiCompatibleProvider::FetchModelsAsync(
                 }
             }
         }
-
-        Logger::Info("OpenAiCompatibleProvider", "成功自动获取到 " +
-                     std::to_string(modelList.size()) + " 个在线模型");
+        else if (root.contains("models") && root["models"].isArray())
+        {
+            QJsonArray dataArr = root["models"].toArray();
+            for (const auto& item : dataArr)
+            {
+                if (item.isObject())
+                {
+                    QString name = item.toObject()["name"].toString();
+                    if (!name.isEmpty())
+                    {
+                        modelList.append(name);
+                    }
+                }
+            }
+        }
 
         if (callback)
         {
-            callback(true, modelList, QString());
+            callback(true, latencyMs, modelList, QString());
+        }
+    });
+}
+
+void OpenAiCompatibleProvider::FetchModelsAsync(
+    std::function<void(bool success, const QStringList& models, const QString& error)> callback)
+{
+    TestConnectivityAsync([callback](bool success, qint64 /*latencyMs*/, const QStringList& models, const QString& error) {
+        if (callback)
+        {
+            callback(success, models, error);
         }
     });
 }
@@ -141,20 +165,18 @@ void OpenAiCompatibleProvider::ChatCompletionAsync(
         request.setRawHeader("Authorization", ("Bearer " + _apiKey.trimmed()).toUtf8());
     }
 
-    QJsonObject reqObj;
-    reqObj["model"] = model.trimmed();
-    reqObj["messages"] = messages;
-    reqObj["temperature"] = temperature;
-    if (maxTokens > 0)
-    {
-        reqObj["max_tokens"] = maxTokens;
-    }
+    QJsonObject body;
+    body["model"] = model;
+    body["messages"] = messages;
+    body["temperature"] = temperature;
+    body["max_tokens"] = maxTokens;
+    body["stream"] = false;
 
-    QJsonDocument doc(reqObj);
+    QJsonDocument doc(body);
     QByteArray postData = doc.toJson(QJsonDocument::Compact);
 
-    Logger::Info("OpenAiCompatibleProvider", "发送 Chat 请求至: " + urlStr.toStdString() +
-                 ", 模型: " + model.toStdString());
+    Logger::Info("OpenAiCompatibleProvider", "发起 ChatCompletion: " + urlStr.toStdString() +
+                 " | 模型: " + model.toStdString());
 
     QNetworkReply* reply = _netManager.post(request, postData);
 
@@ -205,6 +227,7 @@ void OpenAiCompatibleProvider::ChatCompletionAsync(
 
         QJsonObject root = resDoc.object();
         QString replyContent;
+        QString reasoningContent;
 
         if (root.contains("choices") && root["choices"].isArray())
         {
@@ -214,13 +237,25 @@ void OpenAiCompatibleProvider::ChatCompletionAsync(
                 QJsonObject choiceObj = choices[0].toObject();
                 if (choiceObj.contains("message") && choiceObj["message"].isObject())
                 {
-                    replyContent = choiceObj["message"].toObject()["content"].toString();
+                    QJsonObject msgObj = choiceObj["message"].toObject();
+                    replyContent = msgObj["content"].toString();
+                    if (msgObj.contains("reasoning_content"))
+                    {
+                        reasoningContent = msgObj["reasoning_content"].toString().trimmed();
+                    }
                 }
             }
         }
 
+        // 如果包含单独的 reasoning_content 且正文中未自带 <think> 标签，将其整合成标准 <think> 格式
+        if (!reasoningContent.isEmpty() && !replyContent.contains("<think>"))
+        {
+            replyContent = QString("<think>\n%1\n</think>\n\n%2").arg(reasoningContent, replyContent);
+        }
+
         Logger::Info("OpenAiCompatibleProvider", "收到 AI 响应，字符数: " +
-                     std::to_string(replyContent.length()));
+                     std::to_string(replyContent.length()) +
+                     (reasoningContent.isEmpty() ? "" : " (包含推理链)"));
 
         if (callback)
         {

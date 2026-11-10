@@ -3,6 +3,22 @@
 #include "../utils/Logger.h"
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QDateTime>
+
+QString AiResponseValidator::ExtractThinkingBlock(const QString& text, QString& remainingText)
+{
+    remainingText = text;
+    QRegularExpression thinkRegex("<think>([\\s\\S]*?)</think>", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpressionMatch match = thinkRegex.match(text);
+    if (match.hasMatch())
+    {
+        QString thinking = match.captured(1).trimmed();
+        remainingText.remove(thinkRegex);
+        remainingText = remainingText.trimmed();
+        return thinking;
+    }
+    return QString();
+}
 
 QString AiResponseValidator::ExtractJsonBlock(const QString& text)
 {
@@ -35,11 +51,16 @@ ValidatedAiPlan AiResponseValidator::ValidateAndParse(const QString& rawResponse
         return plan;
     }
 
-    QString jsonStr = ExtractJsonBlock(rawResponse);
+    // 1. 提取推理与思维链 (<think>...</think>)
+    QString remainingAfterThink;
+    plan.ThinkingProcess = ExtractThinkingBlock(rawResponse, remainingAfterThink);
+
+    // 2. 提取 JSON 代码块
+    QString jsonStr = ExtractJsonBlock(remainingAfterThink);
     plan.RawJsonString = jsonStr;
 
-    // 提取 Markdown 分析文本 (去掉代码块)
-    QString markdown = rawResponse;
+    // 3. 提取 Markdown 分析文本 (去除代码块)
+    QString markdown = remainingAfterThink;
     QRegularExpression codeBlockRegex("```(?:json)?[\\s\\S]*?```", QRegularExpression::CaseInsensitiveOption);
     markdown.remove(codeBlockRegex);
     plan.AnalysisMarkdown = markdown.trimmed();
@@ -62,7 +83,7 @@ ValidatedAiPlan AiResponseValidator::ValidateAndParse(const QString& rawResponse
 
     QJsonObject root = doc.object();
 
-    // 1. 判断是否为检测任务 (DetectionTask)
+    // 4. 判断是否为检测任务 (DetectionTask)
     if (root.contains("taskType"))
     {
         std::string typeStr = root["taskType"].toString().toStdString();
@@ -103,41 +124,47 @@ ValidatedAiPlan AiResponseValidator::ValidateAndParse(const QString& rawResponse
 
         plan.HasDetectionTask = true;
         plan.IsValid = true;
-        Logger::Info("AiResponseValidator", "AI 检测任务校验成功: " + plan.Task.Name);
     }
-    // 2. 判断是否为流水线 (Pipeline)
-    else if (root.contains("pipeline") && root["pipeline"].isArray())
+    // 5. 判断是否为流水线算子步骤 (steps)
+    else if (root.contains("steps") && root["steps"].isArray())
     {
-        QJsonArray stepsArr = root["pipeline"].toArray();
-        QJsonArray validatedSteps;
+        QJsonArray steps = root["steps"].toArray();
+        QJsonArray validSteps;
 
-        for (int i = 0; i < stepsArr.size(); ++i)
+        for (const auto& stepVal : steps)
         {
-            QJsonObject sObj = stepsArr[i].toObject();
-            std::string opName = sObj["name"].toString().toStdString();
-
-            // 检查算子白名单
-            auto opInstance = OpRegistry::Instance().Create(opName);
-            if (!opInstance)
+            if (!stepVal.isObject())
             {
-                plan.IsValid = false;
-                plan.ErrorMessage = QString("AI 推荐了本地未支持的未知算子: %1").arg(QString::fromStdString(opName));
-                Logger::Warn("AiResponseValidator", plan.ErrorMessage.toStdString());
-                return plan;
+                continue;
+            }
+            QJsonObject stepObj = stepVal.toObject();
+            std::string opName = stepObj["name"].toString().toStdString();
+
+            // 严格白名单防御：必须已在系统 OpRegistry 中注册
+            if (!OpRegistry::Instance().Has(opName))
+            {
+                Logger::Warn("AiResponseValidator", "拦截未注册幻觉算子: " + opName);
+                continue;
             }
 
-            validatedSteps.append(sObj);
+            validSteps.append(stepObj);
         }
 
+        if (validSteps.isEmpty())
+        {
+            plan.IsValid = false;
+            plan.ErrorMessage = "流水线所有算子均未通过系统合法性白名单校验";
+            return plan;
+        }
+
+        plan.PipelineSteps = validSteps;
         plan.HasPipeline = true;
-        plan.PipelineSteps = validatedSteps;
         plan.IsValid = true;
-        Logger::Info("AiResponseValidator", "AI 流水线校验成功，步骤数: " + std::to_string(validatedSteps.size()));
     }
     else
     {
         plan.IsValid = false;
-        plan.ErrorMessage = "JSON 配置既不包含 taskType 也缺少 pipeline 步骤数组";
+        plan.ErrorMessage = "JSON 不包含 taskType 或 steps 节点，无法构造执行实体";
     }
 
     return plan;

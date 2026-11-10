@@ -152,6 +152,7 @@ set(UI_SOURCES
     src/ui/detection/DetectionPanelWidget.cpp
     src/ui/detection/BatchTestDialog.cpp
     src/ui/ai/AiAssistantWidget.cpp
+    src/ui/ai/AiSettingsDialog.cpp
 )
 
 set(UI_FORMS
@@ -168,6 +169,7 @@ set(UI_FORMS
     src/ui/detection/DetectionPanelWidget.ui
     src/ui/detection/BatchTestDialog.ui
     src/ui/ai/AiAssistantWidget.ui
+    src/ui/ai/AiSettingsDialog.ui
 )
 
 # 原生 Windows 资源文件 (Qt Creator / Visual Studio 自动跨平台编译)

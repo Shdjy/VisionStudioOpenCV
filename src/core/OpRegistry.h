@@ -58,6 +58,14 @@ public:
     std::unique_ptr<IOpNode> Create(const std::string& name) const;
 
     /**
+     * @brief 检查指定名称的算子是否已在系统中注册
+     */
+    bool Has(const std::string& name) const
+    {
+        return _creators.find(name) != _creators.end();
+    }
+
+    /**
      * @brief 获取所有已注册算子的元数据列表
      */
     std::vector<OpMetadata> GetAllOperators() const;

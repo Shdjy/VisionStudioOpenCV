@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AiSettingsDialog</class>
+ <widget class="QDialog" name="AiSettingsDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>780</width>
+    <height>560</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>AI 服务商与模型管理中心 (Provider Settings)</string>
+  </property>
+  <layout class="QVBoxLayout" name="dialogMainLayout">
+   <item>
+    <layout class="QHBoxLayout" name="contentLayout">
+     <!-- 左侧服务商列表 -->
+     <item>
+      <widget class="QFrame" name="leftFrame">
+       <property name="minimumSize">
+        <size>
+         <width>230</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>260</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="frameShape">
+        <enum>QFrame::StyledPanel</enum>
+       </property>
+       <layout class="QVBoxLayout" name="leftLayout">
+        <property name="leftMargin">
+         <number>4</number>
+        </property>
+        <property name="topMargin">
+         <number>4</number>
+        </property>
+        <property name="rightMargin">
+         <number>4</number>
+        </property>
+        <property name="bottomMargin">
+         <number>4</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="lblProfileTitle">
+          <property name="font">
+           <font>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>AI 服务商配置列表 (Profiles)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QListWidget" name="listProfiles">
+          <property name="alternatingRowColors">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="listBtnLayout">
+          <item>
+           <widget class="QPushButton" name="btnAddProfile">
+            <property name="toolTip">
+             <string>新增服务商配置</string>
+            </property>
+            <property name="text">
+             <string>+ 新增</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnDeleteProfile">
+            <property name="toolTip">
+             <string>删除选中的服务商</string>
+            </property>
+            <property name="text">
+             <string>删除</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnSetActive">
+          <property name="styleSheet">
+           <string notr="true">background-color: #2e7d32; color: white; font-weight: bold;</string>
+          </property>
+          <property name="text">
+           <string>✔ 设为当前激活</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <!-- 右侧详细配置 -->
+     <item>
+      <widget class="QScrollArea" name="rightScrollArea">
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="scrollAreaWidgetContents">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>500</width>
+          <height>480</height>
+         </rect>
+        </property>
+        <layout class="QVBoxLayout" name="rightFormLayout">
+         <!-- 基本网络配置 -->
+         <item>
+          <widget class="QGroupBox" name="grpBasic">
+           <property name="title">
+            <string>服务商连接与认证信息</string>
+           </property>
+           <layout class="QFormLayout" name="formBasicLayout">
+            <item row="0" column="0">
+             <widget class="QLabel" name="lblProfileName">
+              <property name="text">
+               <string>服务商名称:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QLineEdit" name="txtName"/>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="lblQuickPreset">
+              <property name="text">
+               <string>快速填入模板:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QComboBox" name="cbPresetTemplate"/>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="lblProviderType">
+              <property name="text">
+               <string>协议类型:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QComboBox" name="cbProviderType"/>
+            </item>
+            <item row="3" column="0">
+             <widget class="QLabel" name="lblBaseUrl">
+              <property name="text">
+               <string>API 基础地址:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="1">
+             <widget class="QLineEdit" name="txtBaseUrl">
+              <property name="placeholderText">
+               <string>https://api.tokenskingdom.com/v1</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QLabel" name="lblApiKey">
+              <property name="text">
+               <string>API 密钥 (Key):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <layout class="QHBoxLayout" name="keyLayout">
+              <item>
+               <widget class="QLineEdit" name="txtApiKey">
+                <property name="echoMode">
+                 <enum>QLineEdit::Password</enum>
+                </property>
+                <property name="placeholderText">
+                 <string>sk-xxxxxxxxxxxxxxxxxxxxxxxx</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="btnToggleKey">
+                <property name="maximumSize">
+                 <size>
+                  <width>55</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>显示</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="5" column="1">
+             <layout class="QHBoxLayout" name="testLayout">
+              <item>
+               <widget class="QPushButton" name="btnTestConnection">
+                <property name="styleSheet">
+                 <string notr="true">background-color: #0288d1; color: white;</string>
+                </property>
+                <property name="text">
+                 <string>⚡ 测试连接与延迟</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="lblTestResult">
+                <property name="styleSheet">
+                 <string notr="true">font-size: 11px;</string>
+                </property>
+                <property name="text">
+                 <string>未测试</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <!-- 模型与拉取 -->
+         <item>
+          <widget class="QGroupBox" name="grpModel">
+           <property name="title">
+            <string>大模型选择与获取</string>
+           </property>
+           <layout class="QFormLayout" name="formModelLayout">
+            <item row="0" column="0">
+             <widget class="QLabel" name="lblModel">
+              <property name="text">
+               <string>默认模型名称:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <layout class="QHBoxLayout" name="modelRowLayout">
+              <item>
+               <widget class="QComboBox" name="cbModel">
+                <property name="editable">
+                 <bool>true</bool>
+                </property>
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="btnFetchModels">
+                <property name="text">
+                 <string>🔄 自动拉取模型</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="1" column="1">
+             <widget class="QLabel" name="lblModelStatus">
+              <property name="styleSheet">
+               <string notr="true">font-size: 11px; color: #757575;</string>
+              </property>
+              <property name="text">
+               <string>支持手动输入或点击右侧自动拉取</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <!-- 高级推理参数 -->
+         <item>
+          <widget class="QGroupBox" name="grpParams">
+           <property name="title">
+            <string>推理超参数 (Hyperparameters)</string>
+           </property>
+           <layout class="QFormLayout" name="formParamsLayout">
+            <item row="0" column="0">
+             <widget class="QLabel" name="lblTemp">
+              <property name="text">
+               <string>多样性 (Temperature):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QDoubleSpinBox" name="spinTemperature">
+              <property name="minimum">
+               <double>0.000000000000000</double>
+              </property>
+              <property name="maximum">
+               <double>1.000000000000000</double>
+              </property>
+              <property name="singleStep">
+               <double>0.050000000000000</double>
+              </property>
+              <property name="value">
+               <double>0.200000000000000</double>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QLabel" name="lblTokens">
+              <property name="text">
+               <string>最大 Token 限制:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QSpinBox" name="spinMaxTokens">
+              <property name="minimum">
+               <number>256</number>
+              </property>
+              <property name="maximum">
+               <number>32768</number>
+              </property>
+              <property name="singleStep">
+               <number>512</number>
+              </property>
+              <property name="value">
+               <number>4096</number>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="lblTimeout">
+              <property name="text">
+               <string>网络超时 (秒):</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QSpinBox" name="spinTimeout">
+              <property name="minimum">
+               <number>5</number>
+              </property>
+              <property name="maximum">
+               <number>300</number>
+              </property>
+              <property name="value">
+               <number>60</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <spacer name="verticalSpacer">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <!-- 底部对话框按钮 -->
+   <item>
+    <layout class="QHBoxLayout" name="bottomBtnLayout">
+     <item>
+      <widget class="QPushButton" name="btnResetDefaults">
+       <property name="text">
+        <string>恢复出厂预设</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text">
+        <string>取消</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnSave">
+       <property name="styleSheet">
+        <string notr="true">background-color: #1976d2; color: white; font-weight: bold; min-width: 90px; padding: 5px 12px;</string>
+       </property>
+       <property name="text">
+        <string>保存并应用</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

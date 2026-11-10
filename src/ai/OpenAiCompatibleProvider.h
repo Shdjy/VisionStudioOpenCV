@@ -28,6 +28,13 @@ public:
     void SetTimeoutMs(int timeoutMs) { _timeoutMs = timeoutMs; }
     int GetTimeoutMs() const { return _timeoutMs; }
 
+    /**
+     * @brief 异步测试与服务端连通性及网络往返延迟 (RTT)
+     * @param callback 回调函数: (bool success, qint64 latencyMs, const QStringList& models, const QString& error)
+     */
+    void TestConnectivityAsync(
+        std::function<void(bool success, qint64 latencyMs, const QStringList& models, const QString& error)> callback);
+
     void FetchModelsAsync(
         std::function<void(bool success, const QStringList& models, const QString& error)> callback) override;
 
