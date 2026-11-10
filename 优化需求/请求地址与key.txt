@@ -1,3 +1,0 @@
-sk-your-tokenskingdom-api-key-here
-
-https://api.tokenskingdom.com/v1
