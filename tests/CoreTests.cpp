@@ -720,7 +720,24 @@ void TestAiResponseValidator()
     Require(plan.Task.Name == "药片计数检测", "task name mismatch");
     Require(plan.Task.Configuration["morphKernelSize"].toInt() == 5, "kernel size should be adjusted to odd");
 
-    // 2. 验证未知算子拦截
+    // 2. 验证 pipeline 节点与合法算子提取
+    QString validPipelineJson = R"(
+    基于您的工业需求，建议使用如下预处理流水线：
+    ```json
+    {
+      "pipeline": [
+        {"name": "GaussianBlur", "parameters": {"ksize": 5}},
+        {"name": "Canny", "parameters": {"threshold1": 50, "threshold2": 150}}
+      ]
+    }
+    ```
+    )";
+    ValidatedAiPlan pipePlan = AiResponseValidator::ValidateAndParse(validPipelineJson);
+    Require(pipePlan.IsValid, "expected valid pipeline plan");
+    Require(pipePlan.HasPipeline, "expected pipeline steps to be detected from 'pipeline' key");
+    Require(pipePlan.PipelineSteps.size() == 2, "expected 2 pipeline steps");
+
+    // 3. 验证未知算子拦截
     QString hallucinatedPipeline = R"(
     ```json
     {
@@ -731,7 +748,7 @@ void TestAiResponseValidator()
     ```
     )";
     ValidatedAiPlan badPlan = AiResponseValidator::ValidateAndParse(hallucinatedPipeline);
-    Require(!badPlan.IsValid, "hallucinated operator should be rejected");
+    Require(!badPlan.HasPipeline, "hallucinated operator should not produce valid pipeline");
 }
 
 void TestLiveAiProviderAndModelsFetch()
